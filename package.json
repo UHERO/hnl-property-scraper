@@ -1,0 +1,24 @@
+{
+  "name": "property-scraper",
+  "version": "1.0.0",
+  "description": "Simple server for scraping property data from the Honolulu assessor web site.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "UHERO",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.15.2",
+    "cheerio": "^0.20.0",
+    "cors": "^2.7.1",
+    "express": "^4.14.0",
+    "express-csv": "^0.6.0",
+    "parse-address": "0.0.5",
+    "request": "^2.72.0"
+  },
+  "devDependencies": {
+    "chai": "^3.5.0"
+  }
+}

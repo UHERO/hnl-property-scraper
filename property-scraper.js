@@ -1,0 +1,315 @@
+'use strict';
+var request = require("request"),
+    cheerio = require("cheerio"),
+    parser = require('parse-address');
+
+function numberCleaner(streetNumber) {
+    streetNumber = String(streetNumber);
+    if (streetNumber.length < 5 || streetNumber.indexOf('-') !== -1) {
+        return streetNumber.replace('-0','-');
+    }
+    if (streetNumber.charAt(2) == 0) {
+        return streetNumber.slice(0, 2) + '-' + streetNumber.slice(3);
+    }
+    return streetNumber.slice(0,2) + '-' + streetNumber.slice(2);
+}
+
+function success(response) {
+    if (typeof response.statusCode !== 'number') {
+        return false;
+    }
+    return Math.floor(response.statusCode/100) === 2;
+}
+
+function stringContainsAny(string, arrayOfStrings) {
+    if (!Array.isArray(arrayOfStrings)) {
+        return false;
+    }
+    for (let testString of arrayOfStrings) {
+        if (string.indexOf(testString) !== -1) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function reformatDateString(dateString) {
+    try {
+        return (new Date(dateString)).toISOString().split('T')[0];
+    } catch (e) {
+        return '';
+    }
+}
+
+function integerFromString(input) {
+    return Number.parseInt(String(input).replace(/[^\d\.]*/g,''));
+}
+
+function integerCentsFromString(input) {
+    return Number.parseInt(input.split('.').pop().slice(0,2));
+}
+
+function cellValue($, tableHeader, columnHeader, row) {
+    var headerRow = $(`td.table_header:contains("${tableHeader}")`).parent().next(),
+        headerRowValues = headerRow.children().map((i, el)=> $(el).text()).get(),
+        index = headerRowValues.findIndex((text) => 
+            text.split(' ').join('').indexOf(columnHeader.split(' ').join('')) !== -1
+        );
+    if (index === -1) {
+        return 'not found';
+    }
+    return headerRow.next().children().map((i, el) => $(el).text()).get(index);
+}
+
+class PropertyScraper {
+    static columns() {
+        return [
+                'parcelNumber',
+                'ownerNames',
+                'address',
+                'landArea',
+                'buildingValue',
+                'propertyValue',
+                'occupancy',
+                'yearBuilt',
+                'buildingArea',
+                'beds',
+                'baths',
+                'halfBaths',
+                'pv1Date',
+                'pv1Value',
+                'pv1Cents',
+                'pv2Date',
+                'pv2Dollars',
+                'pv2Cents',
+                'whDate',
+                'whDollars',
+                'censusTract',
+                'censusBlock'
+            ]
+    }
+    
+    static getTMK(addressString, callback) {
+        if (typeof addressString !== 'string' || addressString.length == 0) {
+            callback([]);
+            return;
+        }
+
+        var parsedAddress = parser.parseLocation(addressString),
+            options = { method: 'POST',
+                url: 'http://qpublic9.qpublic.net/hi_honolulu_nalsearch.php',
+                form: {
+                    BEGIN: '0',
+                    county: 'hi_honolulu',
+                    searchType: 'address_search',
+                    streetName: parsedAddress.street,
+                    streetNumber: numberCleaner(parsedAddress.number)
+                }
+            };
+        
+        request(options, function(error, response, body) {
+            if (error || !success(response)) {
+                callback([]);
+                return;
+            }
+            var $ = cheerio.load(body),
+                resultIndex = 0,
+                results = [];
+            $('.search_value').each(function(i) {
+                switch (i % 4) {
+                    case 0:
+                        results[resultIndex] = { parcelNumber: $(this).text().trim() };
+                        break;
+                    case 1:
+                        results[resultIndex].ownerNames = $(this).html().replace(/(&nbsp;|&#xA0;)/g, '')
+                            .split('<br>').map(string => string.trim());
+                        break;
+                    case 2:
+                        results[resultIndex].address = $(this).text().trim();
+                        break;
+                    case 3:
+                        resultIndex++;
+                        break;
+                }
+            });
+            callback(results);
+        });
+    }
+
+    static getPropertyValues(tmk, callback) {
+        var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}`;
+        request(url, function(error, response, body) {
+            if (error || !success(response)) {
+                callback({});
+                return;
+            }
+
+            var $ = cheerio.load(body);
+            
+            callback({
+                landArea: integerFromString($('td.owner_header:contains("Land Area (approximate sq ft)") + td').text()),
+                buildingValue: integerFromString(cellValue($, 'Assessment Information', 'Assessed Building Value')),
+                propertyValue: integerFromString(cellValue($, 'Assessment Information', 'Total Property Assessed Value')),
+                occupancy: cellValue($, 'Residential Improvement Information', 'Occupancy').trim(),
+                yearBuilt: integerFromString(cellValue($, 'Residential Improvement Information', 'Year Built')),
+                buildingArea: integerFromString(cellValue($, 'Residential Improvement Information', 'Square Feet')),
+                beds: integerFromString(cellValue($, 'Residential Improvement Information', 'Bedrooms')),
+                baths: integerFromString(cellValue($, 'Residential Improvement Information', 'Full Baths')),
+                halfBaths: integerFromString(cellValue($, 'Residential Improvement Information', 'Half Baths'))
+            });
+        });
+    }
+
+    static getPermitLinks(tmk, callback) {
+        var url = 'http://dppweb.honolulu.gov/DPPWeb/default.aspx?' +
+            `PossePresentation=BuildingPermitSearch&PosseShowCriteriaPane=No&TMK=${String(tmk).slice(0,8)}`;
+        request(url, function(error, response, body) {
+            if (error || !success(response)) {
+                callback([]);
+                return;
+            }
+
+            var $ = cheerio.load(body),
+                links = [],
+                pvKeywords = ['solar', 'photovoltaic', 'pv'];
+
+            $('table.possegrid tbody tr').each(function(i) {
+                if (stringContainsAny($(this).text().toLowerCase(), pvKeywords) 
+                    && $(this).text().indexOf('Permit application closed') !== -1) {
+                    $(this).children('td').each(function(j) {
+                        if (j === 0) {
+                            links.push($(this).children('span').children('a').attr('href'));
+                            return false;
+
+                        }
+                    });
+                }
+            });
+            
+            callback(links);
+        });
+    }
+
+    static getPermitValues(link, callback) {
+        var url = `http://dppweb.honolulu.gov/DPPWeb/${link}`;
+        request(url, function(error, response, body) {
+            if (error || !success(response)) {
+                callback({});
+                return;
+            }
+
+            var $ = cheerio.load(body),
+                estimatedValue = $('span[id^="EstimatedValueofWork"]').text(),
+                acceptedValue = $('span[id^="AcceptedValue"]').text();
+
+            callback({
+                waterHeater: $('span[id^="Description"]').text().search(/water heater/i) !== -1,
+                jobCompleted: reformatDateString($('span[id^="CompletedDate"]').text()),
+                constructionCompleted: reformatDateString($('span[id^="ConstructionCompletedDate"]').text()),
+                estimatedDollars: integerFromString(estimatedValue),
+                estimatedCents: integerCentsFromString(estimatedValue),
+                acceptedDollars: integerFromString(acceptedValue),
+                acceptedCents: integerCentsFromString(acceptedValue),
+                taxMapKeyLink: $('span[id^=Link_1] a').attr('href')
+            });
+        });
+    }
+
+    static getCensusDetails(link, callback) {
+        var url = `http://dppweb.honolulu.gov/DPPWeb/${link}`;
+        request(url, function(error, response, body) {
+            if (error || !success(response)) {
+                callback({});
+                return;
+            }
+
+            var $ = cheerio.load(body);
+
+            callback({
+                censusTract: Number.parseInt($('span[id^="CensusTract"]').text()),
+                censusBlock: Number.parseInt($('span[id^="CensusBlock"]').text())
+            });
+        });
+    }
+
+    static getAllDataFromAddress(address, callback) {
+        PropertyScraper.getTMK(address, function(tmks) {
+            var tmkCount = tmks.length,
+                permitCount = 0,
+                processedPermits = 0,
+                processedTMKs = 0;
+
+            tmks.forEach(function(tmk) {
+                var permits = [],
+                    permitsSummary = {},
+                    processedCensusData = false;
+                
+                tmk.ownerNames = tmk.ownerNames.join('; ');
+                
+                PropertyScraper.getPropertyValues(tmk.parcelNumber, function(parcelResult) {
+                    Object.assign(tmk, parcelResult);
+                    processedTMKs++;
+                    if (processedTMKs == tmkCount && processedPermits == permitCount && processedCensusData) {
+                        callback(tmks);
+                    }
+                });
+                
+                PropertyScraper.getPermitLinks(tmk.parcelNumber, function(permitLinks) {
+                    var collectedCensusData = false;
+                    
+                    permitCount += permitLinks.length;
+                    
+                    permitLinks.forEach(function(permitLink) {
+                        PropertyScraper.getPermitValues(permitLink, function(permitValues) {
+                            if (!collectedCensusData) {
+                                collectedCensusData = true;
+                                PropertyScraper.getCensusDetails(permitValues.taxMapKeyLink, function(censusData) {
+                                    Object.assign(tmk, censusData);
+                                    processedCensusData = true;
+                                    if (processedTMKs === tmkCount && processedPermits === permitCount) {
+                                        callback(tmks);
+                                    }
+                                });
+                            }
+                            permits.push(permitValues);
+                            if (permits.length !== permitCount) {
+                                processedPermits++;
+                                return;
+                            }
+                            
+                            // sort the permits by date
+                            permits.sort((a, b) => a.jobCompleted - b.jobCompleted);
+                            let waterHeaterPermits = permits.filter((permit) => permit.waterHeater);
+                            // take the first two pv permits
+                            let pvPermits = permits.filter((permit) => !permit.waterHeater);
+                            if (pvPermits.length > 0) {
+                                permitsSummary.pv1Date = pvPermits[0].jobCompleted;
+                                permitsSummary.pv1Value = pvPermits[0].acceptedDollars;
+                                permitsSummary.pv1Cents = pvPermits[0].acceptedCents;
+                            }
+                            if (pvPermits.length > 1) {
+                                permitsSummary.pv2Date = pvPermits[1].jobCompleted;
+                                permitsSummary.pv2Dollars = pvPermits[1].acceptedDollars;
+                                permitsSummary.pv2Cents = pvPermits[1].acceptedCents;
+                            }
+                            // and the first water heater permit
+                            if (waterHeaterPermits.length > 0) {
+                                permitsSummary.whDate = waterHeaterPermits[0].jobCompleted;
+                                permitsSummary.whDollars = waterHeaterPermits[0].acceptedDollars;
+                                permitsSummary.whCents = waterHeaterPermits[0].whCents;
+                            }
+                            Object.assign(tmk, permitsSummary);
+                            if (processedTMKs == tmkCount && processedCensusData) {
+                                callback(tmks);
+                            }
+                            
+                            processedPermits++;
+                        });
+                    });
+                });
+            });
+        });
+    }
+}
+
+module.exports = PropertyScraper;

@@ -1,0 +1,4 @@
+"parcelNumber","ownerNames","address","landArea","buildingValue","propertyValue","occupancy","yearBuilt","buildingArea","beds","baths","halfBaths","pv1Date","pv1Value","pv1Cents","pv2Date","pv2Dollars","pv2Cents","whDate","whDollars","censusTract","censusBlock"
+"910500520000","KIMURA,WAYNE S; KIMURA,EDITH N M; KIMURA,EDITH N M","91-129 WAIMAPUNA PL",3120,221300,497700,"SINGLE-FAMILY",1988,1410,3,2,1,"2013-01-29",13650,0,"2015-11-10",8900,0,"2013-01-08",3900,8412,1000
+"890120510000","HAWAIIAN HOME LANDS; KAAHANUI,LAURENE L","89-547 ULEI LOOP",11330,80200,290800,"not found",null,null,null,null,null,"2013-05-17",48706,0,null,null,null,null,null,940002,3010
+"910731770000","ANGUAY,MERVIN E; ANGUAY,YOSHIKO M","91-52 PAHUHU WAY",3360,218000,499300,"SINGLE-FAMILY",1993,1099,3,2,0,"2013-11-01",18000,0,null,null,null,null,null,8410,1004
