@@ -136,6 +136,32 @@ class PropertyScraper {
         });
     }
 
+    var insertBatchInDB = function(batch, url, collectionName) {
+        var MongoClient = require("mongodb").MongoClient,
+            assert = require('assert');
+
+        MongoClient.connect(url, function(err, db) {
+            assert.equal(null, err);
+            console.log('Connected successfully to the server');
+
+            insertDocuments(db, collectionName, batch, function () {
+                db.close();
+            });
+        });
+    };
+
+    const insertDocuments = function(db, collectionName, batch, callback) {
+        var collection = db.collection(collectionName);
+
+        collection.insertMany(batch, function(err, result) {
+            assert.equal(err, null);
+            assert.equal(batch.length, result.result.n);
+            assert.equal(batch.length, result.ops.length);
+            console.log(`Inserted ${batch.length} documents into the collection`);
+            callback(result);
+        });
+    };
+
     static getPropertyValues(tmk, callback) {
         var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}`;
         request(url, function(error, response, body) {
