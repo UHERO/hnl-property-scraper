@@ -134,9 +134,33 @@ class PropertyScraper {
             });
             callback(results);
         });
-    }
+    };
 
-    var insertBatchInDB = function(batch, url, collectionName) {
+    static insertOne(db, collectionName, object, callback) {
+        var collection = db.collection(collectionName);
+
+        collection.insertOne(object, function(err, result) {
+            assert.equal(err, null);
+            assert.equal(1, result.result.n);
+            assert.equal(1, result.ops.length);
+            console.log(`Inserted one documents into the collection`);
+            callback(result);
+        });
+    };
+
+    static insertDocuments(db, collectionName, batch, callback) {
+        var collection = db.collection(collectionName);
+
+        collection.insertMany(batch, function(err, result) {
+            assert.equal(err, null);
+            assert.equal(batch.length, result.result.n);
+            assert.equal(batch.length, result.ops.length);
+            console.log(`Inserted ${batch.length} documents into the collection`);
+            callback(result);
+        });
+    };
+
+    static insertBatchInDB(batch, url, collectionName) {
         var MongoClient = require("mongodb").MongoClient,
             assert = require('assert');
 
@@ -150,17 +174,45 @@ class PropertyScraper {
         });
     };
 
-    const insertDocuments = function(db, collectionName, batch, callback) {
-        var collection = db.collection(collectionName);
+    static insertOneInDB(object, url, collectionName) {
+        var MongoClient = require("mongodb").MongoClient,
+            assert = require('assert');
 
-        collection.insertMany(batch, function(err, result) {
-            assert.equal(err, null);
-            assert.equal(batch.length, result.result.n);
-            assert.equal(batch.length, result.ops.length);
-            console.log(`Inserted ${batch.length} documents into the collection`);
-            callback(result);
+        MongoClient.connect(url, function(err, db) {
+            assert.equal(null, err);
+            console.log('Connected successfully to the server');
+
+            insertOne(db, collectionName, object, function () {
+                db.close();
+            });
         });
     };
+
+
+
+    static getPage(tmk, callback) {
+        var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
+        request(url, function(error, response, body) {
+            if (error || !success(response)) {
+                callback({});
+                return;
+            };
+
+            callback(body);
+        });
+    };
+
+    static getTablesFromPage(body, callback) {
+        var $ = cheerio.load(body);
+
+        $('table[class=table_class]').each(function(){
+           var tableName = $(this)('td[class=table_header]');
+
+           callback({:})
+
+        });
+
+    }
 
     static getPropertyValues(tmk, callback) {
         var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}`;
