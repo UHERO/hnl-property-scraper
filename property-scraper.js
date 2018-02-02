@@ -136,7 +136,7 @@ class PropertyScraper {
         });
     };
 
-    static insertOne(db, collectionName, object, callback) {
+    static insertObject(db, collectionName, object, callback) {
         var collection = db.collection(collectionName);
 
         collection.insertOne(object, function(err, result) {
@@ -167,7 +167,7 @@ class PropertyScraper {
         MongoClient.connect(url, function(err, db) {
             assert.equal(null, err);
 
-            insertDocuments(db, collectionName, batch, function () {
+            PropertyScraper.insertDocuments(db, collectionName, batch, function () {
                 db.close();
             });
         });
@@ -176,34 +176,34 @@ class PropertyScraper {
     static insertOneInDB(object, url, collectionName) {
         var MongoClient = require("mongodb").MongoClient,
             assert = require('assert');
-
         MongoClient.connect(url, function(err, db) {
             assert.equal(null, err);
             console.log('Connected successfully to the server');
 
-            insertOne(db, collectionName, object, function () {
+            PropertyScraper.insertObject(db, collectionName, object, function () {
                 db.close();
             });
         });
     };
 
     static parseByTMK(tmks){
-        const url = "mongodb://localhost:27017/test1",
+        const url = "mongodb://127.0.0.1:27017/test1",
             collectionName = "Honolulu_county_data";
         for (let i = 0; i < tmks.length; i++) {
-            this.getAllData(tmks[i], this.insertOneInDB(url, collectionName));
+            let object =this.getAllData(tmks[i]);
+            console.log(object);
+            PropertyScraper.insertOneInDB(object, url, collectionName);
         }
     }
 
-    static getAllData(tmk, callback) {
+    static getAllData(tmk) {
         var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
         request(url, function(error, response, body) {
             if (error || !success(response)) {
                 callback({});
                 return;
-            };
-
-            callback(getTablesFromPage(body));
+            }
+            return(PropertyScraper.getTablesFromPage(body));
         });
     };
 
@@ -213,15 +213,15 @@ class PropertyScraper {
         const allData = [];
         $('table[class=table_class]').each(function() {
             const tableName = $(this).find('td[class=table_header]').text().trim();
-            print(tableName);
             const data = {};
             if (tableName === "Owner and Parcel Information Print Owner Info") {
-                data[tableName] = parseOwner($, $(this));
+                data[tableName] = PropertyScraper.parseOwner($, $(this));
             } else {
-                data[tableName] = parseTableHorizontally($, $(this));
+                data[tableName] = PropertyScraper.parseTableHorizontally($, $(this));
             }
             allData.push(data);
         });
+        console.log(allData);
         return (allData);
     };
 
@@ -244,7 +244,7 @@ class PropertyScraper {
             const name = (!/^\s+$/.test($(this).text())) ? $(this).text().trim() : `missing_${i}`;
             names.push(name);
         });
-        return extractRows($, tag, names);
+        return PropertyScraper.extractRows($, tag, names);
     };
 
     static extractRows($, tag, names) {
@@ -436,5 +436,7 @@ class PropertyScraper {
         });
     }
 }
+
+PropertyScraper.parseByTMK([430040310000]);
 
 module.exports = PropertyScraper;
