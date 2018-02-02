@@ -166,7 +166,6 @@ class PropertyScraper {
 
         MongoClient.connect(url, function(err, db) {
             assert.equal(null, err);
-            console.log('Connected successfully to the server');
 
             insertDocuments(db, collectionName, batch, function () {
                 db.close();
@@ -188,9 +187,15 @@ class PropertyScraper {
         });
     };
 
+    static parseByTMK(tmks){
+        const url = "mongodb://localhost:27017/test1",
+            collectionName = "Honolulu_county_data";
+        for (let i = 0; i < tmks.length; i++) {
+            this.getAllData(tmks[i], this.insertOneInDB(url, collectionName));
+        }
+    }
 
-
-    static getPage(tmk, callback) {
+    static getAllData(tmk, callback) {
         var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
         request(url, function(error, response, body) {
             if (error || !success(response)) {
@@ -198,11 +203,11 @@ class PropertyScraper {
                 return;
             };
 
-            callback(body);
+            callback(getTablesFromPage(body));
         });
     };
 
-    static getTablesFromPage(body, callback) {
+    static getTablesFromPage(body) {
         cheerio = require('cheerio');
         const $ = cheerio.load(body);
         const allData = [];
@@ -217,7 +222,7 @@ class PropertyScraper {
             }
             allData.push(data);
         });
-        callback(allData);
+        return (allData);
     };
 
     static parseOwner($, tag) {
