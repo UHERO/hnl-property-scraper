@@ -203,16 +203,58 @@ class PropertyScraper {
     };
 
     static getTablesFromPage(body, callback) {
-        var $ = cheerio.load(body);
+        cheerio = require('cheerio');
+        const $ = cheerio.load(body);
+        const allData = [];
+        $('table[class=table_class]').each(function() {
+            const tableName = $(this).find('td[class=table_header]').text().trim();
+            print(tableName);
+            const data = {};
+            if (tableName === "Owner and Parcel Information Print Owner Info") {
+                data[tableName] = parseOwner($, $(this));
+            } else {
+                data[tableName] = parseTableHorizontally($, $(this));
+            }
+            allData.push(data);
+        });
+        callback(allData);
+    };
 
-        $('table[class=table_class]').each(function(){
-           var tableName = $(this)('td[class=table_header]');
+    static parseOwner($, tag) {
+        const objects = {}, names = [], values = [];
+        $(tag).find(`td`).each(function (i) {
+            if ($(this).hasClass(`owner_header`)) {
+                const name = (!/^\s+$/.test($(this).text())) ? $(this).text().trim() : `missing_${i}`;
 
-           callback({:})
+                objects[name] = $(this).next().text();
+            }
 
         });
+        return objects;
+    };
 
-    }
+    static parseTableHorizontally($, tag) {
+        const names = [];
+        $(tag).find(`td.sales_header`).first().parent().children().each(function (i) {
+            const name = (!/^\s+$/.test($(this).text())) ? $(this).text().trim() : `missing_${i}`;
+            names.push(name);
+        });
+        return extractRows($, tag, names);
+    };
+
+    static extractRows($, tag, names) {
+        const records = [];
+        $(tag).find(`tr`).each(function () {
+            if ($(this).children().first().hasClass(`sales_value`)) {
+                const object = {};
+                for (let i = 0; i < names.length; i++) {
+                    object[names[i]] = $(this).find(`td.sales_value`).eq(i).text().trim();
+                }
+                records.push(object);
+            }
+        });
+        return records;
+    };
 
     static getPropertyValues(tmk, callback) {
         var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}`;
