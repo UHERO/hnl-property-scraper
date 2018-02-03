@@ -224,11 +224,10 @@ class PropertyScraper {
             tableName = camelize($(this).find('td[class=table_header]').text());
             if (tableName === "OwnerAndParcelInformation") {
                 allData[tableName] = PropertyScraper.parseOwner($, $(this));
-            } else {
+            } else if (tableName !== "") {
                 allData[tableName] = PropertyScraper.parseTableHorizontally($, $(this));
             }
         });
-        console.log(allData);
         return (allData);
     };
 
