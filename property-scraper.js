@@ -1,7 +1,15 @@
 'use strict';
 var request = require("request"),
     cheerio = require("cheerio"),
-    parser = require('parse-address');
+    parser = require('parse-address'),
+    assert = require('assert');
+
+function camelize(str) {
+    return str.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, function(match, index) {
+        if (+match === 0) return ""; // or if (/\s+/.test(match)) for white spaces
+        return index == 0 ? match.toLowerCase() : match.toUpperCase();
+    });
+}
 
 function numberCleaner(streetNumber) {
     streetNumber = String(streetNumber);
@@ -134,7 +142,130 @@ class PropertyScraper {
             });
             callback(results);
         });
+    };
+
+    static insertObject(db, collectionName, object, callback) {
+        var collection = db.collection(collectionName);
+
+        collection.insertOne(object, function(err, result) {
+            assert.equal(err, null);
+            assert.equal(1, result.result.n);
+            assert.equal(1, result.ops.length);
+            console.log(`Inserted one documents into the collection`);
+            callback(result);
+        });
+    };
+
+    static insertDocuments(db, collectionName, batch, callback) {
+        var collection = db.collection(collectionName);
+
+        collection.insertMany(batch, function(err, result) {
+            assert.equal(err, null);
+            assert.equal(batch.length, result.result.n);
+            assert.equal(batch.length, result.ops.length);
+            console.log(`Inserted ${batch.length} documents into the collection`);
+            callback(result);
+        });
+    };
+
+    static insertBatchInDB(batch, url, collectionName) {
+        var MongoClient = require("mongodb").MongoClient;
+
+        MongoClient.connect(url, function(err, db) {
+            assert.equal(null, err);
+
+            PropertyScraper.insertDocuments(db, collectionName, batch, function () {
+                db.close();
+            });
+        });
+    };
+
+    static insertOneInDB(object, url, collectionName) {
+        const MongoClient = require("mongodb").MongoClient;
+
+        MongoClient.connect(url, function(err, db) {
+            assert.equal(null, err);
+            console.log('Connected successfully to the server');
+            PropertyScraper.insertObject(db, collectionName, object, function () {
+                db.close();
+            });
+        });
+    };
+
+    static parseByTMK(tmks){
+        const base = "mongodb://127.0.0.1:27017/test1",
+            collectionName = "hnl_county_data";
+        for (let i = 0; i < tmks.length; i++) {
+            PropertyScraper.getAllData(tmks[i], function(object) {
+                PropertyScraper.insertOneInDB(object, base, collectionName)
+            });
+            // PropertyScraper.insertOneInDB(object, base, collectionName);
+        }
     }
+
+    static getAllData(tmk, callback) {
+        let url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
+        request(url, function(error, response, body) {
+            if (error || !success(response)) {
+                callback({});
+                return;
+            }
+            callback(PropertyScraper.getTablesFromPage(tmk, body));
+        });
+    };
+
+    static getTablesFromPage(tmk, body) {
+        cheerio = require('cheerio');
+        const $ = cheerio.load(body);
+        const allData = {tmk: tmk};
+        $('table[class=table_class]').each(function() {
+            let tableName = $(this).find('td[class=table_header]').find(`font`).remove();
+
+            tableName = camelize($(this).find('td[class=table_header]').text());
+            if (tableName === "OwnerAndParcelInformation") {
+                allData[tableName] = PropertyScraper.parseOwner($, $(this));
+            } else if (tableName !== "") {
+                allData[tableName] = PropertyScraper.parseTableHorizontally($, $(this));
+            }
+        });
+        return (allData);
+    };
+
+    static parseOwner($, tag) {
+        const objects = {};
+        $(tag).find(`td`).each(function (i) {
+            if ($(this).hasClass(`owner_header`)) {
+                const name = camelize((!/^\s+$/.test($(this).text())) ? $(this).text() : `missing_${i}`);
+
+                objects[name] = $(this).next().text().trim();
+            }
+
+        });
+        return objects;
+    };
+
+    static parseTableHorizontally($, tag) {
+        const names = [];
+        $(tag).find(`td.sales_header`).first().parent().children().each(function (i) {
+            const name = camelize((!/^\s+$/.test($(this).text())) ? $(this).text() : `missing_${i}`);
+            names.push(name);
+        });
+        return PropertyScraper.extractRows($, tag, names);
+    };
+
+    static extractRows($, tag, names) {
+        const records = [];
+        $(tag).find(`tr`).each(function () {
+            if ($(this).children().first().hasClass(`sales_value`)) {
+                const object = {};
+                for (let i = 0; i < names.length; i++) {
+                    object[names[i]] = $(this).find(`td.sales_value`).eq(i).text().replace(/\s+/g, " ");
+                }
+                records.push(object);
+            }
+        });
+        return records;
+    };
 
     static getPropertyValues(tmk, callback) {
         var url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}`;
@@ -311,5 +442,10 @@ class PropertyScraper {
         });
     }
 }
+
+const base = "mongodb://127.0.0.1:27017/test1",
+    collectionName = "hnl_county_data";
+
+PropertyScraper.parseByTMK([430040310000]);
 
 module.exports = PropertyScraper;
