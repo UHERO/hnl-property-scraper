@@ -1,8 +1,10 @@
 'use strict';
-var request = require("request"),
+const request = require("request"),
     cheerio = require("cheerio"),
     parser = require('parse-address'),
-    assert = require('assert');
+    assert = require('assert'),
+    csv = require(`csv-parser`),
+    fs = require(`fs`);
 
 function camelize(str) {
     return str.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, function(match, index) {
@@ -192,15 +194,31 @@ class PropertyScraper {
         });
     };
 
-    static parseByTMK(tmks){
+    static scrapeByTMKs(tmks){
         const base = "mongodb://127.0.0.1:27017/test1",
             collectionName = "hnl_county_data";
         for (let i = 0; i < tmks.length; i++) {
+            if (i % 1000 === 0) {
+                console.log(`iteration ${i}`);
+            }
             PropertyScraper.getAllData(tmks[i], function(object) {
                 PropertyScraper.insertOneInDB(object, base, collectionName)
             });
-            // PropertyScraper.insertOneInDB(object, base, collectionName);
         }
+    }
+
+    static scrapeWithCSV(filename) {
+        let tmks = [];
+
+        fs.createReadStream(filename)
+            .pipe(csv())
+            .on('data', function (data) {
+                let tmk = Number(data.TMK + "0000");
+                tmks.push(tmk);
+            }).on('end', function () {
+                console.log("TMKs are retrieved");
+                PropertyScraper.scrapeByTMKs(tmks);
+        });
     }
 
     static getAllData(tmk, callback) {
@@ -215,7 +233,6 @@ class PropertyScraper {
     };
 
     static getTablesFromPage(tmk, body) {
-        cheerio = require('cheerio');
         const $ = cheerio.load(body);
         const allData = {tmk: tmk};
         $('table[class=table_class]').each(function() {
@@ -443,9 +460,10 @@ class PropertyScraper {
     }
 }
 
-const base = "mongodb://127.0.0.1:27017/test1",
-    collectionName = "hnl_county_data";
+PropertyScraper.scrapeWithCSV(`./files/TMKS.csv`);
 
-PropertyScraper.parseByTMK([430040310000]);
+// PropertyScraper.getAllData(230300420000, function (object) {
+//    PropertyScraper.insertOneInDB(object, "mongodb://127.0.0.1:27017/test1", "hnl_county_data");
+// });
 
 module.exports = PropertyScraper;
