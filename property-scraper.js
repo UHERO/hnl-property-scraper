@@ -1,8 +1,10 @@
 'use strict';
-var request = require("request"),
-    cheerio = require("cheerio"),
+const request = require('request'),
+    cheerio = require('cheerio'),
     parser = require('parse-address'),
-    assert = require('assert');
+    assert = require('assert'),
+    csv = require('csv-parser'),
+    fs = require('fs');
 
 function camelize(str) {
     return str.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, function(match, index) {
@@ -10,6 +12,11 @@ function camelize(str) {
         return index == 0 ? match.toLowerCase() : match.toUpperCase();
     });
 }
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 
 function numberCleaner(streetNumber) {
     streetNumber = String(streetNumber);
@@ -151,7 +158,7 @@ class PropertyScraper {
             assert.equal(err, null);
             assert.equal(1, result.result.n);
             assert.equal(1, result.ops.length);
-            console.log(`Inserted one documents into the collection`);
+            console.log('Inserted one documents into the collection');
             callback(result);
         });
     };
@@ -169,7 +176,7 @@ class PropertyScraper {
     };
 
     static insertBatchInDB(batch, url, collectionName) {
-        var MongoClient = require("mongodb").MongoClient;
+        var MongoClient = require('mongodb').MongoClient;
 
         MongoClient.connect(url, function(err, db) {
             assert.equal(null, err);
@@ -181,7 +188,7 @@ class PropertyScraper {
     };
 
     static insertOneInDB(object, url, collectionName) {
-        const MongoClient = require("mongodb").MongoClient;
+        const MongoClient = require('mongodb').MongoClient;
 
         MongoClient.connect(url, function(err, db) {
             assert.equal(null, err);
@@ -192,15 +199,31 @@ class PropertyScraper {
         });
     };
 
-    static parseByTMK(tmks){
-        const base = "mongodb://127.0.0.1:27017/test1",
-            collectionName = "hnl_county_data";
+    static scrapeByTMKs(tmks){
+        const base = 'mongodb://127.0.0.1:27017/test1',
+            collectionName = 'hnl_county_data';
         for (let i = 0; i < tmks.length; i++) {
-            PropertyScraper.getAllData(tmks[i], function(object) {
-                PropertyScraper.insertOneInDB(object, base, collectionName)
+            if (i % 10001 === 0) {
+                console.log(`iteration ${i}`);
+            }
+            PropertyScraper.getAllData(tmks[i], function (object) {
+                PropertyScraper.insertOneInDB(object, base, collectionName);
             });
-            // PropertyScraper.insertOneInDB(object, base, collectionName);
+
         }
+    }
+
+    static scrapeWithCSV(filename) {
+        let tmks = [];
+
+        fs.createReadStream(filename)
+            .pipe(csv())
+            .on('data', function ({ TMK }) {
+                tmks.push(`${TMK}0000`);
+            }).on('end', function () {
+                console.log('TMKs are retrieved');
+                PropertyScraper.scrapeByTMKs(tmks);
+        });
     }
 
     static getAllData(tmk, callback) {
@@ -210,21 +233,21 @@ class PropertyScraper {
                 callback({});
                 return;
             }
+            console.log('request is successful');
             callback(PropertyScraper.getTablesFromPage(tmk, body));
         });
     };
 
     static getTablesFromPage(tmk, body) {
-        cheerio = require('cheerio');
         const $ = cheerio.load(body);
         const allData = {tmk: tmk};
         $('table[class=table_class]').each(function() {
-            let tableName = $(this).find('td[class=table_header]').find(`font`).remove();
+            let tableName = $(this).find('td[class=table_header]').find('font').remove();
 
             tableName = camelize($(this).find('td[class=table_header]').text());
-            if (tableName === "OwnerAndParcelInformation") {
+            if (tableName === 'OwnerAndParcelInformation') {
                 allData[tableName] = PropertyScraper.parseOwner($, $(this));
-            } else if (tableName !== "") {
+            } else if (tableName !== '') {
                 allData[tableName] = PropertyScraper.parseTableHorizontally($, $(this));
             }
         });
@@ -233,8 +256,8 @@ class PropertyScraper {
 
     static parseOwner($, tag) {
         const objects = {};
-        $(tag).find(`td`).each(function (i) {
-            if ($(this).hasClass(`owner_header`)) {
+        $(tag).find('td').each(function (i) {
+            if ($(this).hasClass('owner_header')) {
                 const name = camelize((!/^\s+$/.test($(this).text())) ? $(this).text() : `missing_${i}`);
 
                 objects[name] = $(this).next().text().trim();
@@ -255,11 +278,11 @@ class PropertyScraper {
 
     static extractRows($, tag, names) {
         const records = [];
-        $(tag).find(`tr`).each(function () {
-            if ($(this).children().first().hasClass(`sales_value`)) {
+        $(tag).find('tr').each(function () {
+            if ($(this).children().first().hasClass('sales_value')) {
                 const object = {};
                 for (let i = 0; i < names.length; i++) {
-                    object[names[i]] = $(this).find(`td.sales_value`).eq(i).text().replace(/\s+/g, " ");
+                    object[names[i]] = $(this).find(`td.sales_value`).eq(i).text().replace(/\s+/g, ' ');
                 }
                 records.push(object);
             }
@@ -442,10 +465,5 @@ class PropertyScraper {
         });
     }
 }
-
-const base = "mongodb://127.0.0.1:27017/test1",
-    collectionName = "hnl_county_data";
-
-PropertyScraper.parseByTMK([430040310000]);
 
 module.exports = PropertyScraper;
