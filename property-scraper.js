@@ -152,10 +152,16 @@ class PropertyScraper {
     };
 
     static insertObject(db, collectionName, object, callback) {
-        var collection = db.collection(collectionName);
+        var collection = db.collection(collectionName),
+            badTmks = db.collection('bad_tmks');
 
         collection.insertOne(object, function(err, result) {
-            assert.equal(err, null);
+            if (err !== null){
+                badTmks.insertOne({ tmk: object.tmk, err: err }, function (error) {
+                    console.log(error);
+                });
+                return;
+            }
             assert.equal(1, result.result.n);
             assert.equal(1, result.ops.length);
             console.log('Inserted one documents into the collection');
@@ -199,21 +205,39 @@ class PropertyScraper {
         });
     };
 
-    static scrapeByTMKs(tmks){
+    static scrapeByTMKs(tmks, callback) {
         const base = 'mongodb://127.0.0.1:27017/test1',
             collectionName = 'hnl_county_data';
         for (let i = 0; i < tmks.length; i++) {
-            if (i % 10001 === 0) {
-                console.log(`iteration ${i}`);
-            }
             PropertyScraper.getAllData(tmks[i], function (object) {
                 PropertyScraper.insertOneInDB(object, base, collectionName);
             });
+        }
+        callback();
+    };
 
+    static scrapeByTMKsAsync(tmks) {
+        const base = 'mongodb://127.0.0.1:27017/test1',
+            collectionName = 'hnl_county_data';
+        PropertyScraper.getAllData(tmks.pop(), function (object) {
+            PropertyScraper.insertOneInDB(object, base, collectionName);
+            PropertyScraper.scrapeByTMKsAsync(tmks);
+            });
+    };
+
+    static batching(tmks, size) {
+        if (tmks.length > size) {
+            PropertyScraper.scrapeByTMKs(tmks.slice(0, size), function () {
+                PropertyScraper.batching(tmks.slice(size), size);
+            });
+        } else {
+            PropertyScraper.scrapeByTMKs(tmks, function () {
+                console.log('Done!');
+            });
         }
     }
 
-    static scrapeWithCSV(filename) {
+    static parseCsvForKeys(filename, callback){
         let tmks = [];
 
         fs.createReadStream(filename)
@@ -222,11 +246,12 @@ class PropertyScraper {
                 tmks.push(`${TMK}0000`);
             }).on('end', function () {
                 console.log('TMKs are retrieved');
-                PropertyScraper.scrapeByTMKs(tmks);
-        });
-    }
+                callback(tmks);
+            });
+        return tmks;
+    };
 
-    static getAllData(tmk, callback) {
+    static getAllData(tmk, callback){
         let url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
         request(url, function(error, response, body) {
             if (error || !success(response)) {
@@ -238,7 +263,7 @@ class PropertyScraper {
         });
     };
 
-    static getTablesFromPage(tmk, body) {
+    static getTablesFromPage(tmk, body){
         const $ = cheerio.load(body);
         const allData = {tmk: tmk};
         $('table[class=table_class]').each(function() {
@@ -257,7 +282,7 @@ class PropertyScraper {
     static parseOwner($, tag) {
         const objects = {};
         $(tag).find('td').each(function (i) {
-            if ($(this).hasClass('owner_header')) {
+            if ($(this).hasClass('owner_header') && $(this).attr('colspan') !== '2') {
                 const name = camelize((!/^\s+$/.test($(this).text())) ? $(this).text() : `missing_${i}`);
 
                 objects[name] = $(this).next().text().trim();
@@ -465,5 +490,13 @@ class PropertyScraper {
         });
     }
 }
+
+// PropertyScraper.parseCsvForKeys('./files/TMKS.csv', function (object) {
+//     PropertyScraper.scrapeByTMKsAsync(object);
+// });
+
+PropertyScraper.parseCsvForKeys('./files/TMKS.csv', function (object) {
+    PropertyScraper.batching(object, 30);
+});
 
 module.exports = PropertyScraper;
