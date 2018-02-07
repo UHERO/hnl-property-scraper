@@ -3,4 +3,3 @@ node_js:
   - "stable"
   - "8"
   - "6"
-before_script: chmod 077 ./node_modules/.bin/mocha
