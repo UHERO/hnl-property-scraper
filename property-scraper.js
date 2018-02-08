@@ -78,7 +78,7 @@ class PropertyScraper {
                 PropertyScraper.scrapeByTMKsAsync(tmks, () => console.log('done'));
             }
         });
-    }
+    };
 
     parseCsvForKeys(filename, callback) {
         let tmks = [];
