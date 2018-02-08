@@ -1,3 +1,3 @@
 const PropertyScraper = require('./property-scraper.js');
 
-PropertyScraper.scrapeWithCSV('./files/TMKS.csv');
+PropertyScraper.parallelScraping(30, './files/TMKS.csv');
