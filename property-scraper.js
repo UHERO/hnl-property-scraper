@@ -235,16 +235,12 @@ class PropertyScraper {
             });
     }
 
-    static batching(tmks, size) {
-        if (tmks.length > size) {
-            PropertyScraper.scrapeByTMKs(tmks.slice(0, size), function () {
-                PropertyScraper.batching(tmks.slice(size), size);
-            });
-        } else {
-            PropertyScraper.scrapeByTMKs(tmks, function () {
-                console.log('Done!');
-            });
-        }
+    static parallelScraping(tmks, numFlows, fileName) {
+        PropertyScraper.parseCsvForKeys(fileName, function (tmks) {
+            for (let i = 0; i < numFlows; i++) {
+                PropertyScraper.scrapeByTMKsAsync(tmks, () => console.log('done'));
+            }
+        });
     }
 
     static parseCsvForKeys(filename, callback){
@@ -501,14 +497,5 @@ class PropertyScraper {
     }
 }
 
-// PropertyScraper.parseCsvForKeys('./files/TMKS.csv', function (object) {
-//     PropertyScraper.scrapeByTMKsAsync(object);
-// });
-
-PropertyScraper.parseCsvForKeys('./files/TMKS.csv', function (tmks) {
-    for (let i = 0; i < 30; i++) {
-        PropertyScraper.scrapeByTMKsAsync(tmks, () => console.log('done'));
-    }
-});
 
 module.exports = PropertyScraper;
