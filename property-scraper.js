@@ -4,7 +4,8 @@ const request = require('request'),
     parser = require('parse-address'),
     assert = require('assert'),
     csv = require('csv-parser'),
-    fs = require('fs');
+    fs = require('fs'),
+    MongoClient = require('mongodb').MongoClient;
 
 function camelize(str) {
     return str.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, function(match, index) {
@@ -152,7 +153,7 @@ class PropertyScraper {
     };
 
     static insertObject(db, collectionName, object, callback) {
-        var collection = db.collection(collectionName),
+        let collection = db.collection(collectionName),
             badTmks = db.collection('bad_tmks');
 
         collection.insertOne(object, function(err, result) {
@@ -194,13 +195,13 @@ class PropertyScraper {
     };
 
     static insertOneInDB(object, url, collectionName) {
-        const MongoClient = require('mongodb').MongoClient;
 
-        MongoClient.connect(url, function(err, db) {
+        MongoClient.connect(url, function(err, client) {
             assert.equal(null, err);
+            let db = client.db('test1');
             console.log('Connected successfully to the server');
             PropertyScraper.insertObject(db, collectionName, object, function () {
-                db.close();
+                client.close();
             });
         });
     };
@@ -209,21 +210,30 @@ class PropertyScraper {
         const base = 'mongodb://127.0.0.1:27017/test1',
             collectionName = 'hnl_county_data';
         for (let i = 0; i < tmks.length; i++) {
-            PropertyScraper.getAllData(tmks[i], function (object) {
-                PropertyScraper.insertOneInDB(object, base, collectionName);
+            // decrease number of available connections
+            PropertyScraper.getAllData(tmks[i], function (collectedData) {
+                PropertyScraper.insertOneInDB(collectedData, base, collectionName);
+                console.log("A");
+                // grab a TMK off the queue
+                // and scrapeByTMKs
             });
+            console.log("B");
         }
+        console.log("C");
         callback();
-    };
+    }
 
-    static scrapeByTMKsAsync(tmks) {
+    static scrapeByTMKsAsync(tmks, callback) {
         const base = 'mongodb://127.0.0.1:27017/test1',
             collectionName = 'hnl_county_data';
-        PropertyScraper.getAllData(tmks.pop(), function (object) {
-            PropertyScraper.insertOneInDB(object, base, collectionName);
-            PropertyScraper.scrapeByTMKsAsync(tmks);
+        if (tmks.length === 0) {
+            return callback();
+        }
+        PropertyScraper.getAllData(tmks.pop(), function (collectedData) {
+            PropertyScraper.insertOneInDB(collectedData, base, collectionName);
+            PropertyScraper.scrapeByTMKsAsync(tmks, callback);
             });
-    };
+    }
 
     static batching(tmks, size) {
         if (tmks.length > size) {
@@ -495,8 +505,10 @@ class PropertyScraper {
 //     PropertyScraper.scrapeByTMKsAsync(object);
 // });
 
-PropertyScraper.parseCsvForKeys('./files/TMKS.csv', function (object) {
-    PropertyScraper.batching(object, 30);
+PropertyScraper.parseCsvForKeys('./files/TMKS.csv', function (tmks) {
+    for (let i = 0; i < 30; i++) {
+        PropertyScraper.scrapeByTMKsAsync(tmks, () => console.log('done'));
+    }
 });
 
 module.exports = PropertyScraper;
