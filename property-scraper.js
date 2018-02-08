@@ -23,9 +23,18 @@ function success(response) {
 
 class PropertyScraper {
 
-    static insertObject(db, collectionName, object, callback) {
-        let collection = db.collection(collectionName),
-            badTmks = db.collection('bad_tmks');
+    constructor(mongoURL, mongoUser, mongoPass, dbName, collectionName, badTMKs){
+        this.mongoURL = mongoURL;
+        this.mongoUser = mongoUser;
+        this.mongoPass = mongoPass;
+        this.dbName = dbName;
+        this.collectionName = collectionName;
+        this.badTMKs = badTMKs;
+    }
+
+    insertObject(db, object, callback) {
+        let collection = db.collection(this.collectionName),
+            badTmks = db.collection(this.badTMKs);
 
         collection.insertOne(object, function (err, result) {
             if (err !== null) {
@@ -41,63 +50,37 @@ class PropertyScraper {
         });
     };
 
-    static insertDocuments(db, collectionName, batch, callback) {
-        var collection = db.collection(collectionName);
+    insertOneInDB(object) {
 
-        collection.insertMany(batch, function (err, result) {
-            assert.equal(err, null);
-            assert.equal(batch.length, result.result.n);
-            assert.equal(batch.length, result.ops.length);
-            console.log(`Inserted ${batch.length} documents into the collection`);
-            callback(result);
-        });
-    };
-
-    static insertBatchInDB(batch, url, collectionName) {
-        var MongoClient = require('mongodb').MongoClient;
-
-        MongoClient.connect(url, function (err, db) {
+        MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, function (err, client) {
             assert.equal(null, err);
-
-            PropertyScraper.insertDocuments(db, collectionName, batch, function () {
-                db.close();
-            });
-        });
-    };
-
-    static insertOneInDB(object, url, collectionName) {
-
-        MongoClient.connect(url, function (err, client) {
-            assert.equal(null, err);
-            let db = client.db('test1');
+            let db = client.db(this.dbName);
             console.log('Connected successfully to the server');
-            PropertyScraper.insertObject(db, collectionName, object, function () {
+            this.insertObject(db, object, function () {
                 client.close();
             });
         });
     };
 
-    static scrapeByTMKsAsync(tmks, callback) {
-        const base = 'mongodb://127.0.0.1:27017/test1',
-            collectionName = 'hnl_county_data';
+    scrapeByTMKsAsync(tmks, callback) {
         if (tmks.length === 0) {
             return callback();
         }
-        PropertyScraper.getAllData(tmks.pop(), function (collectedData) {
-            PropertyScraper.insertOneInDB(collectedData, base, collectionName);
-            PropertyScraper.scrapeByTMKsAsync(tmks, callback);
+        this.getAllData(tmks.pop(), function (collectedData) {
+            this.insertOneInDB(collectedData);
+            this.scrapeByTMKsAsync(tmks, callback);
         });
     }
 
-    static parallelScraping(tmks, numFlows, fileName) {
-        PropertyScraper.parseCsvForKeys(fileName, function (tmks) {
+    parallelScraping(numFlows, fileName) {
+        this.parseCsvForKeys(fileName, function (tmks) {
             for (let i = 0; i < numFlows; i++) {
                 PropertyScraper.scrapeByTMKsAsync(tmks, () => console.log('done'));
             }
         });
     }
 
-    static parseCsvForKeys(filename, callback) {
+    parseCsvForKeys(filename, callback) {
         let tmks = [];
 
         fs.createReadStream(filename)
@@ -111,7 +94,7 @@ class PropertyScraper {
         return tmks;
     };
 
-    static getAllData(tmk, callback) {
+    getAllData(tmk, callback) {
         let url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
         request(url, function (error, response, body) {
             if (error || !success(response)) {
@@ -119,11 +102,11 @@ class PropertyScraper {
                 return;
             }
             console.log('request is successful');
-            callback(PropertyScraper.getTablesFromPage(tmk, body));
+            callback(this.getTablesFromPage(tmk, body));
         });
     };
 
-    static getTablesFromPage(tmk, body) {
+    getTablesFromPage(tmk, body) {
         const $ = cheerio.load(body);
         const allData = {tmk: tmk};
         $('table[class=table_class]').each(function () {
@@ -131,15 +114,15 @@ class PropertyScraper {
 
             tableName = camelize($(this).find('td[class=table_header]').text());
             if (tableName === 'OwnerAndParcelInformation') {
-                allData[tableName] = PropertyScraper.parseOwner($, $(this));
+                allData[tableName] = this.parseOwner($, $(this));
             } else if (tableName !== '') {
-                allData[tableName] = PropertyScraper.parseTableHorizontally($, $(this));
+                allData[tableName] = this.parseTableHorizontally($, $(this));
             }
         });
         return (allData);
     };
 
-    static parseOwner($, tag) {
+    parseOwner($, tag) {
         const objects = {};
         $(tag).find('td').each(function (i) {
             if ($(this).hasClass('owner_header') && $(this).attr('colspan') !== '2') {
@@ -152,16 +135,16 @@ class PropertyScraper {
         return objects;
     };
 
-    static parseTableHorizontally($, tag) {
+    parseTableHorizontally($, tag) {
         const names = [];
         $(tag).find(`td.sales_header`).first().parent().children().each(function (i) {
             const name = camelize((!/^\s+$/.test($(this).text())) ? $(this).text() : `missing_${i}`);
             names.push(name);
         });
-        return PropertyScraper.extractRows($, tag, names);
+        return this.extractRows($, tag, names);
     };
 
-    static extractRows($, tag, names) {
+    extractRows($, tag, names) {
         const records = [];
         $(tag).find('tr').each(function () {
             if ($(this).children().first().hasClass('sales_value')) {
@@ -175,7 +158,7 @@ class PropertyScraper {
         return records;
     };
 
-    static getPermitLinks(tmk, callback) {
+    getPermitLinks(tmk, callback) {
         var url = 'http://dppweb.honolulu.gov/DPPWeb/default.aspx?' +
             `PossePresentation=BuildingPermitSearch&PosseShowCriteriaPane=No&TMK=${String(tmk).slice(0, 8)}`;
         request(url, function (error, response, body) {
@@ -205,7 +188,7 @@ class PropertyScraper {
         });
     }
 
-    static getPermitValues(link, callback) {
+    getPermitValues(link, callback) {
         var url = `http://dppweb.honolulu.gov/DPPWeb/${link}`;
         request(url, function (error, response, body) {
             if (error || !success(response)) {
@@ -230,7 +213,7 @@ class PropertyScraper {
         });
     }
 
-    static getCensusDetails(link, callback) {
+    getCensusDetails(link, callback) {
         var url = `http://dppweb.honolulu.gov/DPPWeb/${link}`;
         request(url, function (error, response, body) {
             if (error || !success(response)) {
