@@ -158,6 +158,17 @@ class PropertyScraper {
         return records;
     };
 
+    getMultiUnitTMKs() {
+        MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, function (err, client) {
+            assert.equal(null, err);
+            let db = client.db(this.dbName);
+            console.log('Connected successfully to the server');
+            const collection = db.collection(this.collectionName);
+
+            return collection.find( { 'Condominium/ApartmentUnitInformation' : { $exists: true } }, {'tmk': true} ).toArray();
+        });
+    };
+
     getPermitLinks(tmk, callback) {
         var url = 'http://dppweb.honolulu.gov/DPPWeb/default.aspx?' +
             `PossePresentation=BuildingPermitSearch&PosseShowCriteriaPane=No&TMK=${String(tmk).slice(0, 8)}`;
@@ -231,6 +242,5 @@ class PropertyScraper {
     }
 
 }
-
 
 module.exports = PropertyScraper;
