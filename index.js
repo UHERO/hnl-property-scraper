@@ -11,4 +11,10 @@ const scraper = new PropertyScraper(
 
 // scraper.parallelScraping(30, './files/TMKS.csv');
 
-console.log(scraper.getMultiUnitsTMKs());
+scraper.getMultiUnitTMKs(function (object) {
+    for (let i = 0; i < 50; i++) {
+        scraper.scrapeByTMKsAsync(object, function () {
+            return;
+        })
+    }
+});

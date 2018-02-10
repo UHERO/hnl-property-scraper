@@ -51,12 +51,13 @@ class PropertyScraper {
     };
 
     insertOneInDB(object) {
+        let _this = this;
 
         MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, function (err, client) {
             assert.equal(null, err);
-            let db = client.db(this.dbName);
+            let db = client.db(_this.dbName);
             console.log('Connected successfully to the server');
-            this.insertObject(db, object, function () {
+            _this.insertObject(db, object, function () {
                 client.close();
             });
         });
@@ -66,16 +67,18 @@ class PropertyScraper {
         if (tmks.length === 0) {
             return callback();
         }
+        let _this = this;
         this.getAllData(tmks.pop(), function (collectedData) {
-            this.insertOneInDB(collectedData);
-            this.scrapeByTMKsAsync(tmks, callback);
+            _this.insertOneInDB(collectedData);
+            _this.scrapeByTMKsAsync(tmks, callback);
         });
     }
 
     parallelScraping(numFlows, fileName) {
+        let _this = this;
         this.parseCsvForKeys(fileName, function (tmks) {
             for (let i = 0; i < numFlows; i++) {
-                PropertyScraper.scrapeByTMKsAsync(tmks, () => console.log('done'));
+                _this.scrapeByTMKsAsync(tmks, () => console.log('done'));
             }
         });
     };
@@ -95,6 +98,7 @@ class PropertyScraper {
     };
 
     getAllData(tmk, callback) {
+        let _this = this;
         let url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
         request(url, function (error, response, body) {
             if (error || !success(response)) {
@@ -102,11 +106,12 @@ class PropertyScraper {
                 return;
             }
             console.log('request is successful');
-            callback(this.getTablesFromPage(tmk, body));
+            callback(_this.getTablesFromPage(tmk, body));
         });
     };
 
     getTablesFromPage(tmk, body) {
+        let _this = this;
         const $ = cheerio.load(body);
         const allData = {tmk: tmk};
         $('table[class=table_class]').each(function () {
@@ -114,9 +119,9 @@ class PropertyScraper {
 
             tableName = camelize($(this).find('td[class=table_header]').text());
             if (tableName === 'OwnerAndParcelInformation') {
-                allData[tableName] = this.parseOwner($, $(this));
+                allData[tableName] = _this.parseOwner($, $(this));
             } else if (tableName !== '') {
-                allData[tableName] = this.parseTableHorizontally($, $(this));
+                allData[tableName] = _this.parseTableHorizontally($, $(this));
             }
         });
         return (allData);
@@ -158,14 +163,15 @@ class PropertyScraper {
         return records;
     };
 
-    getMultiUnitTMKs() {
+    getMultiUnitTMKs(callback) {
+        let _this = this;
         MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, function (err, client) {
             assert.equal(null, err);
-            let db = client.db(this.dbName);
+            let db = client.db(_this.dbName);
             console.log('Connected successfully to the server');
-            const collection = db.collection(this.collectionName);
+            const collection = db.collection(_this.collectionName);
 
-            return collection.find( { 'Condominium/ApartmentUnitInformation' : { $exists: true } }, {'tmk': true} ).toArray();
+            callback(collection.find( { 'Condominium/ApartmentUnitInformation' : { $exists: true } }, {'tmk': true} ).toArray());
         });
     };
 
