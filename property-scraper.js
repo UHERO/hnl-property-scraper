@@ -166,14 +166,39 @@ class PropertyScraper {
       const collection = db.collection(this.collectionName);
 
       console.log(collection.stats());
-      collection.find({ 'Condominium/ApartmentUnitInformation': [] }, { tmk: true }).toArray((err, results) => {
-        if (err) {
-          console.log(err);
+      collection.find({ 'Condominium/ApartmentUnitInformation': [] }, { tmk: true }).toArray((error, results) => {
+        if (error) {
+          console.log(error);
           return;
         }
         callback(results);
       });
     });
+  }
+
+  scrapeOneCondo(tmk, callback) {
+    const url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
+    request(url, (error, response, body) => {
+      if (error || !success(response)) {
+        callback({});
+        return;
+      }
+      console.log('request is successful');
+      callback(this.getTMKsFromCondo(body));
+    });
+  }
+
+  getTMKsFromCondo(body, callback) {
+    const $ = cheerio.load(body);
+
+    const units = [];
+
+    $('table[colspan=3]').find('A').each((_, elem) => {
+      console.log(elem.text.trim());
+      units.push(elem.text.trim());
+    });
+
+    callback(units);
   }
 
   getPermitLinks(tmk, callback) {
