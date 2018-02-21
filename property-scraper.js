@@ -188,17 +188,19 @@ class PropertyScraper {
     });
   }
 
-  getTMKsFromCondo(body, callback) {
+  getTMKsFromCondo(body) {
     const $ = cheerio.load(body);
 
     const units = [];
 
-    $('table[colspan=3]').find('A').each((_, elem) => {
-      console.log(elem.text.trim());
-      units.push(elem.text.trim());
+    $(`td[class=table_header]`).eq(1).parent().parent().children().each((idx, elem) => {
+      if (idx > 1) {
+        units.push($(elem).text().trim().slice(0, 12));
+      }
+
     });
 
-    callback(units);
+    return(units);
   }
 
   getPermitLinks(tmk, callback) {
