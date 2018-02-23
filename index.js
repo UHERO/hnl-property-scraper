@@ -10,5 +10,5 @@ const scraper = new PropertyScraper(
 );
 
 scraper.getMultiUnitTMKs().then(scraper.listMUTMKs).then((tmks) => {
-  scraper.scrapeCondosAsync(tmks, 30).then(console.log).catch(console.log);
+  scraper.scrapeCondosAsync(tmks, 30).then(console.log).catch(err => console.log(err));
 });

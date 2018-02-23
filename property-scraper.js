@@ -23,6 +23,7 @@ class PropertyScraper {
     this.collectionName = collectionName;
     this.badTMKs = badTMKs;
     this.units = [];
+    this.stop = false;
   }
 
   static camelize(str) {
@@ -49,7 +50,7 @@ class PropertyScraper {
         }
         assert.equal(1, result.result.n);
         assert.equal(1, result.ops.length);
-        console.log('Inserted one documents into the collection');
+        console.log('Inserted one document into the collection');
         resolve(result);
       });
     });
@@ -74,7 +75,7 @@ class PropertyScraper {
   scrapeByTMKsAsync(tmks, numThreads) {
     // slice 30 off of tmks
     if (tmks.length === 0) {
-      console.log('done');
+      console.log('done scraping units');
     }
     const batch = tmks.slice(0, numThreads);
     return Promise.all(batch.map(tmk => this.getAllData(tmk).then(this.insertOneInDB))).then(() => {
@@ -86,11 +87,26 @@ class PropertyScraper {
   scrapeCondosAsync(tmks, numThreads) {
     const batch = tmks.slice(0, numThreads);
     if (tmks.length === 0) {
-      console.log('done');
+      this.stop = true;
+      console.log('done retrieving units');
     }
     return Promise
-      .all(batch.map(tmk => this.scrapeOneCondo(tmk).then(this.units.push)))
-      .then(() => this.scrapeCondosAsync(tmks.slice(numThreads), numThreads));
+      .all(batch.map(tmk => this
+        .scrapeOneCondo(tmk)
+        .then((condoUnits) => {
+          this.units = this.units.concat(condoUnits);
+        })))
+      .then(() => {
+        return new Promise((resolve) => {
+          if (this.stop) {
+            resolve('done');
+          }
+          else {
+            console.log(`Units retrieved ${this.units.length}`);
+            this.scrapeCondosAsync(tmks.slice(numThreads), numThreads);
+          }
+        });
+      });
   }
 
   parallelScrapingFromFile(numFlows, fileName) {
