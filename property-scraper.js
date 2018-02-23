@@ -31,51 +31,78 @@ class PropertyScraper {
     });
   }
 
-  insertObject(db, object, callback) {
-    const collection = db.collection(this.collectionName),
-      badTmks = db.collection(this.badTMKs);
+  insertObject(db, object) {
+    const collection = db.collection(this.collectionName);
+    const badTmks = db.collection(this.badTMKs);
 
-    collection.insertOne(object, (err, result) => {
-      if (err !== null) {
-        badTmks.insertOne({ tmk: object.tmk, err }, (error) => {
-          console.log(error);
-        });
-        return;
-      }
-      assert.equal(1, result.result.n);
-      assert.equal(1, result.ops.length);
-      console.log('Inserted one documents into the collection');
-      callback(result);
-    });
-  }
-
-  insertOneInDB(object) {
-    MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, (err, client) => {
-      assert.equal(null, err);
-      const db = client.db(this.dbName);
-      console.log('Connected successfully to the server');
-      this.insertObject(db, object, () => {
-        client.close();
+    return new Promise((resolve, reject) => {
+      collection.insertOne(object, (err, result) => {
+        if (err !== null) {
+          badTmks.insertOne({ tmk: object.tmk, err }, (error) => {
+            if (error) {
+              return reject(error);
+            }
+            return resolve();
+          });
+          return;
+        }
+        assert.equal(1, result.result.n);
+        assert.equal(1, result.ops.length);
+        console.log('Inserted one documents into the collection');
+        resolve(result);
       });
     });
   }
 
-  scrapeByTMKsAsync(tmks, callback) {
-    if (tmks.length === 0) {
-      return callback();
-    }
-    this.getAllData(tmks.pop(), (collectedData) => {
-      this.insertOneInDB(collectedData);
-      this.scrapeByTMKsAsync(tmks, callback);
+  insertOneInDB(object) {
+    return new Promise((resolve, reject) => {
+      MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, (err, client) => {
+        if (err) {
+          return reject(err);
+        }
+        const db = client.db(this.dbName);
+        console.log('Connected successfully to the server');
+        this.insertObject(db, object).then(() => {
+          client.close();
+          resolve();
+        });
+      });
     });
   }
 
-  parallelScraping(numFlows, fileName) {
-    this.parseCsvForKeys(fileName, (tmks) => {
-      for (let i = 0; i < numFlows; i++) {
-        this.scrapeByTMKsAsync(tmks, () => console.log('done'));
-      }
+  scrapeByTMKsAsync(tmks, numThreads) {
+    // slice 30 off of tmks
+    if (tmks.length === 0) {
+      console.log('done');
+    }
+    const batch = tmks.slice(0, numThreads);
+    return Promise.all(batch.map(tmk => this.getAllData(tmk).then(this.insertOneInDB))).then(() => {
+      // call this function with the rest
+      this.scrapeByTMKsAsync(tmks.slice(numThreads), numThreads);
     });
+  }
+
+  scrapeCondosAsync(tmks, numThreads) {
+    const batch = tmks.slice(0, numThreads);
+    const units = [];
+    if (tmks.length === 0) {
+      console.log('done');
+    }
+    return Promise.all(batch.map(tmk => this.scrapeOneCondo(tmk).then(units.push))).then(() => {
+      this.scrapeCondosAsync(tmks.slice(numThreads), numThreads);
+    });
+  }
+
+  parallelScrapingFromFile(numFlows, fileName) {
+    this.parseCsvForKeys(fileName, (tmks) => {
+      this.parallelScraping(numFlows, tmks);
+    });
+  }
+
+  parallelScraping(numFlows, tmks) {
+    for (let i = 0; i < numFlows; i += 1) {
+      this.scrapeByTMKsAsync(tmks, () => console.log('done'));
+    }
   }
 
   parseCsvForKeys(filename, callback) {
@@ -92,15 +119,15 @@ class PropertyScraper {
     return tmks;
   }
 
-  getAllData(tmk, callback) {
+  getAllData(tmk) {
     const url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
-    request(url, (error, response, body) => {
-      if (error || !success(response)) {
-        callback({});
-        return;
-      }
-      console.log('request is successful');
-      callback(this.getTablesFromPage(tmk, body));
+    return new Promise((resolve, reject) => {
+      request(url, (error, response, body) => {
+        if (error || !success(response)) {
+          return reject(Error(`getAllData failed.: ${error}`));
+        }
+        return resolve(this.getTablesFromPage(tmk, body));
+      });
     });
   }
 
@@ -158,33 +185,48 @@ class PropertyScraper {
     return records;
   }
 
-  getMultiUnitTMKs(callback) {
-    MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, (err, client) => {
-      assert.equal(null, err);
-      const db = client.db(this.dbName);
-      console.log('Connected successfully to the server');
-      const collection = db.collection(this.collectionName);
-
-      console.log(collection.stats());
-      collection.find({ 'Condominium/ApartmentUnitInformation': [] }, { tmk: true }).toArray((error, results) => {
-        if (error) {
-          console.log(error);
-          return;
+  getMultiUnitTMKs() {
+    return new Promise((resolve, reject) => {
+      MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, (err, client) => {
+        if (err) {
+          reject(err);
         }
-        callback(results);
+        const db = client.db(this.dbName);
+        console.log('Connected successfully to the server');
+        const collection = db.collection(this.collectionName);
+
+        console.log(collection.stats());
+        collection.find({ 'Condominium/ApartmentUnitInformation': [] }, { tmk: true }).toArray((error, results) => {
+          if (error) {
+            console.log(error);
+            return;
+          }
+          resolve(results);
+        });
       });
     });
   }
 
-  scrapeOneCondo(tmk, callback) {
-    const url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
-    request(url, (error, response, body) => {
-      if (error || !success(response)) {
-        callback({});
-        return;
-      }
-      console.log('request is successful');
-      callback(this.getTMKsFromCondo(body));
+  listMUTMKs(condos) {
+    return new Promise((resolve) => {
+      const MUTMKs = [];
+      condos.forEach((elem) => {
+        MUTMKs.push(elem.tmk);
+      });
+      resolve(MUTMKs);
+    });
+  }
+
+  scrapeOneCondo(tmk) {
+    return new Promise((resolve, reject) => {
+      const url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
+      request(url, (error, response, body) => {
+        if (error || !success(response)) {
+          return reject(error);
+        }
+        console.log('request is successful');
+        return resolve(this.getTMKsFromCondo(body));
+      });
     });
   }
 
@@ -193,14 +235,15 @@ class PropertyScraper {
 
     const units = [];
 
-    $(`td[class=table_header]`).eq(1).parent().parent().children().each((idx, elem) => {
-      if (idx > 1) {
-        units.push($(elem).text().trim().slice(0, 12));
-      }
+    $('td[class=table_header]').eq(1).parent().parent()
+      .children()
+      .each((idx, elem) => {
+        if (idx > 1) {
+          units.push($(elem).text().trim().slice(0, 12));
+        }
+      });
 
-    });
-
-    return(units);
+    return (units);
   }
 
   getPermitLinks(tmk, callback) {
