@@ -22,6 +22,7 @@ class PropertyScraper {
     this.dbName = dbName;
     this.collectionName = collectionName;
     this.badTMKs = badTMKs;
+    this.units = [];
   }
 
   static camelize(str) {
@@ -84,13 +85,12 @@ class PropertyScraper {
 
   scrapeCondosAsync(tmks, numThreads) {
     const batch = tmks.slice(0, numThreads);
-    const units = [];
     if (tmks.length === 0) {
       console.log('done');
     }
-    return Promise.all(batch.map(tmk => this.scrapeOneCondo(tmk).then(units.push))).then(() => {
-      this.scrapeCondosAsync(tmks.slice(numThreads), numThreads);
-    });
+    return Promise
+      .all(batch.map(tmk => this.scrapeOneCondo(tmk).then(this.units.push)))
+      .then(() => this.scrapeCondosAsync(tmks.slice(numThreads), numThreads));
   }
 
   parallelScrapingFromFile(numFlows, fileName) {
@@ -194,25 +194,14 @@ class PropertyScraper {
         const db = client.db(this.dbName);
         console.log('Connected successfully to the server');
         const collection = db.collection(this.collectionName);
-
-        console.log(collection.stats());
-        collection.find({ 'Condominium/ApartmentUnitInformation': [] }, { tmk: true }).toArray((error, results) => {
-          if (error) {
-            console.log(error);
-            return;
-          }
-          resolve(results);
-        });
+        collection.find({ 'Condominium/ApartmentUnitInformation': [] }, { tmk: true }).toArray().then(resolve);
       });
     });
   }
 
   listMUTMKs(condos) {
     return new Promise((resolve) => {
-      const MUTMKs = [];
-      condos.forEach((elem) => {
-        MUTMKs.push(elem.tmk);
-      });
+      const MUTMKs = condos.map(elem => elem.tmk);
       resolve(MUTMKs);
     });
   }
