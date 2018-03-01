@@ -1,10 +1,10 @@
 
-const request = require('request'),
-  cheerio = require('cheerio'),
-  assert = require('assert'),
-  csv = require('csv-parser'),
-  fs = require('fs'),
-  MongoClient = require('mongodb').MongoClient;
+const request = require('request');
+const cheerio = require('cheerio');
+const assert = require('assert');
+const csv = require('csv-parser');
+const fs = require('fs');
+const MongoClient = require('mongodb').MongoClient;
 
 function success(response) {
   if (typeof response.statusCode !== 'number') {
@@ -23,7 +23,8 @@ class PropertyScraper {
     this.collectionName = collectionName;
     this.badTMKs = badTMKs;
     this.units = [];
-    this.stop = false;
+    this.stopCondos = false;
+    this.stopUnits = false;
   }
 
   static camelize(str) {
@@ -56,15 +57,15 @@ class PropertyScraper {
     });
   }
 
-  insertOneInDB(object) {
+  insertOneInDB(data) {
     return new Promise((resolve, reject) => {
       MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, (err, client) => {
         if (err) {
-          return reject(err);
+          reject(err);
         }
         const db = client.db(this.dbName);
         console.log('Connected successfully to the server');
-        this.insertObject(db, object).then(() => {
+        this.insertObject(db, data).then(() => {
           client.close();
           resolve();
         });
@@ -75,19 +76,30 @@ class PropertyScraper {
   scrapeByTMKsAsync(tmks, numThreads) {
     // slice 30 off of tmks
     if (tmks.length === 0) {
+      this.stopUnits = true;
       console.log('done scraping units');
     }
     const batch = tmks.slice(0, numThreads);
-    return Promise.all(batch.map(tmk => this.getAllData(tmk).then(this.insertOneInDB))).then(() => {
-      // call this function with the rest
-      this.scrapeByTMKsAsync(tmks.slice(numThreads), numThreads);
-    });
+    return Promise
+      .all(batch.map(tmk => this.getAllData(tmk).then((data) => {
+        if (data) {
+          this.insertOneInDB(data);
+        }
+        console.log('already inserted');
+      })))
+      .then(() => new Promise((resolve) => {
+        if (this.stopUnits) {
+          resolve();
+        } else {
+          this.scrapeByTMKsAsync(tmks.slice(numThreads), numThreads);
+        }
+      }));
   }
 
   scrapeCondosAsync(tmks, numThreads) {
     const batch = tmks.slice(0, numThreads);
     if (tmks.length === 0) {
-      this.stop = true;
+      this.stopCondos = true;
       console.log('done retrieving units');
     }
     return Promise
@@ -95,18 +107,19 @@ class PropertyScraper {
         .scrapeOneCondo(tmk)
         .then((condoUnits) => {
           this.units = this.units.concat(condoUnits);
+        }).catch((err) => {
+          console.log(err);
         })))
-      .then(() => {
-        return new Promise((resolve) => {
-          if (this.stop) {
-            resolve('done');
-          }
-          else {
-            console.log(`Units retrieved ${this.units.length}`);
-            this.scrapeCondosAsync(tmks.slice(numThreads), numThreads);
-          }
-        });
-      });
+      .then(() => new Promise((resolve) => {
+        if (this.stopCondos) {
+          console.log(`testing if there are units ${this.units.length}`);
+          resolve(this.units);
+          this.scrapeByTMKsAsync(this.units, 30);
+        } else {
+          console.log(`Units retrieved ${this.units.length}`);
+          this.scrapeCondosAsync(tmks.slice(numThreads), numThreads);
+        }
+      }));
   }
 
   parallelScrapingFromFile(numFlows, fileName) {
@@ -135,15 +148,45 @@ class PropertyScraper {
     return tmks;
   }
 
+  checkIfScraped(tmk) {
+    return new Promise((resolve) => {
+      try {
+        MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, (err, client) => {
+          if (err) {
+            console.log(err);
+            return resolve(false);
+          }
+          const db = client.db(this.dbName);
+          const collection = db.collection(this.collectionName);
+          return resolve(collection.find({ tmk: tmk.toString() })
+            .toArray().then((data) => {
+              client.close();
+              return data.length > 0;
+            }));
+        });
+      } catch (err) {
+        console.log(err);
+        resolve(false);
+      }
+    });
+  }
+
   getAllData(tmk) {
     const url = `http://qpublic9.qpublic.net/hi_honolulu_display.php?county=hi_honolulu&KEY=${tmk}&show_history=1&`;
-    return new Promise((resolve, reject) => {
-      request(url, (error, response, body) => {
-        if (error || !success(response)) {
-          return reject(Error(`getAllData failed.: ${error}`));
-        }
-        return resolve(this.getTablesFromPage(tmk, body));
-      });
+
+    return this.checkIfScraped(tmk).then((isScraped) => {
+      if (!isScraped) {
+        return new Promise((resolve, reject) => {
+          request(url, (error, response, body) => {
+            if (error || !success(response)) {
+              console.log((Error(`getAllData failed.: ${error}`)));
+              return resolve();
+            }
+            console.log('request is successful');
+            return resolve(this.getTablesFromPage(tmk, body));
+          });
+        });
+      }
     });
   }
 
@@ -218,7 +261,27 @@ class PropertyScraper {
   listMUTMKs(condos) {
     return new Promise((resolve) => {
       const MUTMKs = condos.map(elem => elem.tmk);
+      console.log('Multi Unit TMKs are retrieved');
       resolve(MUTMKs);
+    });
+  }
+
+  buildUnitsCollection() {
+    return new Promise((resolve, reject) => {
+      MongoClient.connect(`mongodb://${this.mongoUser}:${this.mongoPass}@${this.mongoURL}`, (err, client) => {
+        if (err) {
+          reject(err);
+        }
+        const db = client.db(this.dbName);
+        console.log('Connected successfully to the server');
+        const collection = db.collection('units');
+        collection.insertMany(this.units, (error, result) => {
+          if (error) {
+            reject(error);
+          }
+          console.log(`${result.insertedCount} units inserted`);
+        });
+      });
     });
   }
 
