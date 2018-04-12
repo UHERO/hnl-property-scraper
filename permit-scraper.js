@@ -13,7 +13,7 @@ casper.then(function () {
 });
 
 casper.then(function () {
-  this.echo(this.getHTML());
+  this.echo(this.fetchText('span#AreaInSqFt_713924_38775_sp'));
 });
 
 casper.run();
