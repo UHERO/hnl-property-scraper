@@ -11,13 +11,13 @@ casper.start(
 });
 
 casper.then(function () {
-    const addr = this.getCurrentUrl();
-    PosseId = addr.slice(addr.lastIndexOf('=') + 1);
-    this.echo(PosseId);
+  this.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
 });
 
 casper.then(function () {
-  this.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
+    const addr = this.getCurrentUrl();
+    PosseId = addr.slice(addr.lastIndexOf('=') + 1);
+    this.echo(PosseId);
 });
 
 casper.then(function () {
@@ -29,7 +29,7 @@ casper.then(function () {
 });
 
 casper.then(function () {
-    this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
+    this.click('a#ctl00_cphTopBand_ctl04_hlkTabLink');
 });
 
 casper.run();
