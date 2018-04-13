@@ -1,6 +1,6 @@
 const casper = require('casper').create();
 
-let PosseId = 0;
+var PosseId = 0;
 
 casper.start(
     'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
