@@ -1,43 +1,40 @@
 const casper = require('casper').create();
 
-var PosseId = 0;
+const PosseId = 0;
 
 class PermitScraper {
-
-  static openByTmk(tmk) {
+  static parseByTmk(tmk) {
     casper.start(
       'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
       function () {
         this.fillSelectors('span#TMK_713880_S0_sp', {
-          'input[name="TMK_713880_S0"]': tmk
+          'input[name="TMK_713880_S0"]': tmk,
         }, false);
-      });
+      },
+    );
 
     casper.then(function () {
       this.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
     });
-    PermitScraper.getLinks();
-  }
 
-  static getLinks() {
     casper.then(function () {
       const addr = this.getCurrentUrl();
-      var PosseId = addr.slice(addr.lastIndexOf('=') + 1);
-      this.echo(PosseId);
+      const PosseId = addr.slice(addr.lastIndexOf('=') + 1);
     });
+
+    casper.then(function () {
+      this.echo(this.fetchText('span#AreaInSqFt_713924_38775_sp'));
+    });
+
+    casper.then(function () {
+      this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
+    });
+
+    casper.then(function () {
+      this.click('a#ctl00_cphTopBand_ctl04_hlkTabLink');
+    });
+
+    casper.run();
   }
 }
 
-casper.then(function () {
-  this.echo(this.fetchText('span#AreaInSqFt_713924_38775_sp'));
-});
-
-casper.then(function () {
-   this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
-});
-
-casper.then(function () {
-    this.click('a#ctl00_cphTopBand_ctl04_hlkTabLink');
-});
-
-casper.run();
