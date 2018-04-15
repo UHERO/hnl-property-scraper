@@ -11,6 +11,7 @@ function camelize(str) {
         });
 }
 
+// Search by TMK from the main page
 casper.start(
     'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
     function () {
@@ -29,6 +30,7 @@ casper.then(function () {
     posseId = addr.slice(addr.lastIndexOf('=') + 1);
 });
 
+// Parsing basic info
 casper.then(function () {
     form['developmentPlanAreas'] = this.fetchText('span[id^="Description_713925_734875"]');
     form['floodZones'] = this.fetchText('span[id^="Description_713925_734356"]');
@@ -43,12 +45,19 @@ casper.then(function () {
     this.echo(form.zoning);
 });
 
+// Getting to the permits page
 casper.then(function () {
     this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
 });
 
 casper.then(function () {
-    this.click('a#ctl00_cphTopBand_ctl04_hlkTabLink');
+    // Get the list of links
+
+    // Check date of creation
+
+    // Pick beyond 1999
+
+    // Click the post 1999 links
 });
 
 casper.run();
