@@ -52,7 +52,12 @@ casper.then(function () {
 
 casper.then(function () {
     // Get the list of links
-
+    var ListOfLinks = this.evaluate(function () {
+        var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
+            return link.href;
+        })
+        return links;
+    })
     // Check date of creation
 
     // Pick beyond 1999
