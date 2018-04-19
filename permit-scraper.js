@@ -1,5 +1,22 @@
 var casper = require('casper').create();
 
+var basicSelectorDictionary = {
+  developmentPlanAreas: 'span[id^="Description_713925_734875"]',
+  floodZones: 'span[id^="Description_713925_734356"]',
+  heightLimit: 'span[id^="Description_713925_734869"]',
+  lotRestriction: 'span[id^="Description_713925_775450"]',
+  neighborhoodBoards: 'span[id^="Description_713925_775587"]',
+  SMA: 'span[id^="Description_713925_734863"]',
+  slideArea: 'span[id^="Description_713925_831366"]',
+  stateLandUse: 'span[id^="Description_713925_734860"]',
+  streetSetback: 'span[id^="Description_713925_775513"]',
+  zoning: 'span[id^="Description_713925_734850"]',
+};
+
+var posseSelectorDictionary = {
+  ''
+};
+
 var posseId = 0;
 
 var form = {};
