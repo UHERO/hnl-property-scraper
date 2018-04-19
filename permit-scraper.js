@@ -148,16 +148,9 @@ casper.then(function () {
 
 // Parsing basic info
 casper.then(function () {
-    form['developmentPlanAreas'] = this.fetchText('span[id^="Description_713925_734875"]');
-    form['floodZones'] = this.fetchText('span[id^="Description_713925_734356"]');
-    form['heightLimit'] = this.fetchText('span[id^="Description_713925_734869"]');
-    form['lotRestriction'] = this.fetchText('span[id^="Description_713925_775450"]');
-    form['neighborhoodBoards'] = this.fetchText('span[id^="Description_713925_775587"]');
-    form['SMA'] = this.fetchText('span[id^="Description_713925_734863"]');
-    form['slideArea'] = this.fetchText('span[id^="Description_713925_831366"]');
-    form['stateLandUse'] = this.fetchText('span[id^="Description_713925_734860"]');
-    form['streetSetback'] = this.fetchText('span[id^="Description_713925_775513"]');
-    form['zoning'] = this.fetchText('span[id^="Description_713925_734850"]');
+    for (var key in basicSelectorDictionary) {
+        form[key] = this.fetchText(basicSelectorDictionary[key])
+    }
     this.echo(form.zoning);
 });
 
@@ -167,20 +160,20 @@ casper.then(function () {
 });
 
 
-casper.then(function () {
-    // Get the list of links to post 1999 permits
-    var listOfLinks = this.evaluate(function () {
-        var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
-            return link.href;
-        });
-        return links;
-    })
-
-    this.each(listOfLinks, function (self, link) {
-        self.thenOpen(link, function() {
-            // Parsing the permit
-        })
-    });
+// casper.then(function () {
+//     // Get the list of links to post 1999 permits
+//     var listOfLinks = this.evaluate(function () {
+//         var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
+//             return link.href;
+//         });
+//         return links;
+//     })
+//
+//     this.each(listOfLinks, function (self, link) {
+//         self.thenOpen(link, function() {
+//             // Parsing the permit
+//         })
+//     });
 
 });
 
