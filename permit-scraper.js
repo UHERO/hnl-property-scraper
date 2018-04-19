@@ -50,19 +50,22 @@ casper.then(function () {
     this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
 });
 
+
 casper.then(function () {
-    // Get the list of links
-    var ListOfLinks = this.evaluate(function () {
+    // Get the list of links to post 1999 permits
+    var listOfLinks = this.evaluate(function () {
         var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
             return link.href;
-        })
+        });
         return links;
     })
-    // Check date of creation
 
-    // Pick beyond 1999
+    this.each(listOfLinks, function (self, link) {
+        self.thenOpen(link, function() {
+            // Parsing the permit
+        })
+    });
 
-    // Click the post 1999 links
 });
 
 casper.run();
