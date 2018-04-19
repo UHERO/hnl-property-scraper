@@ -166,20 +166,28 @@ casper.then(function () {
             return link.href;
         });
         return links;
-    })
+    });
+
+    var permits = [];
 
     this.each(listOfLinks, function (self, link) {
         self.thenOpen(link, function() {
+            var permit = {};
             // Parsing the permit
             for (var key in posseSelectorDictionary) {
-                form[key] = this.fetchText(posseSelectorDictionary[key]);
+                permit[key] = this.fetchText(posseSelectorDictionary[key]);
             }
             for (var key in posseButtons) {
-                form[key] = this.getElementAttribute(posseButtons[key], value);
+                permit[key] = this.getElementAttribute(posseButtons[key], value);
             }
+            permits.push(permit);
         });
-        })
+        });
+    form['permits'] = permits;
     });
 
+casper.then(function () {
+    this.echo(form);
+})
 
 casper.run();
