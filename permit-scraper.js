@@ -149,7 +149,7 @@ casper.then(function () {
 // Parsing basic info
 casper.then(function () {
     for (var key in basicSelectorDictionary) {
-        form[key] = this.fetchText(basicSelectorDictionary[key])
+        form[key] = this.fetchText(basicSelectorDictionary[key]);
     }
     this.echo(form.zoning);
 });
@@ -159,22 +159,27 @@ casper.then(function () {
     this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
 });
 
+casper.then(function () {
+    // Get the list of links to post 1999 permits
+    var listOfLinks = this.evaluate(function () {
+        var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
+            return link.href;
+        });
+        return links;
+    })
 
-// casper.then(function () {
-//     // Get the list of links to post 1999 permits
-//     var listOfLinks = this.evaluate(function () {
-//         var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
-//             return link.href;
-//         });
-//         return links;
-//     })
-//
-//     this.each(listOfLinks, function (self, link) {
-//         self.thenOpen(link, function() {
-//             // Parsing the permit
-//         })
-//     });
+    this.each(listOfLinks, function (self, link) {
+        self.thenOpen(link, function() {
+            // Parsing the permit
+            for (var key in posseSelectorDictionary) {
+                form[key] = this.fetchText(posseSelectorDictionary[key]);
+            }
+            for (var key in posseButtons) {
+                form[key] = this.getElementAttribute(posseButtons[key], value);
+            }
+        });
+        })
+    });
 
-});
 
 casper.run();
