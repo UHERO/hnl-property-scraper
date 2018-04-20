@@ -159,14 +159,6 @@ casper.then(function () {
 });
 
 casper.then(function () {
-    // Get the list of links to post 1999 permits
-    // var listOfLinks = this.evaluate(function (self) {
-    //     var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
-    //         return link.href;
-    //     });
-    //     self.echo(links);
-    //     return links;
-    // });
 
     var permits = [];
 
@@ -185,8 +177,8 @@ casper.then(function () {
                 permit[key] = self.getElementAttribute(posseButtons[key], 'value');
             }
             console.log(permit.applicationNumber);
-            permits.push(permit);
-            console.log(permits[permits.length - 1].applicationNumber);
+            //permits.push(permit);
+            //console.log(permits[permits.length - 1].applicationNumber);
         });
         });
     console.log(permits[0].applicationNumber);
