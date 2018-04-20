@@ -173,7 +173,9 @@ casper.then(function () {
 
     var self = this;
 
-    this.echo(this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href'));
+    var links = this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
+
+    this.echo(links);
 
     this.each(links, function (link) {
         console.log(link);
