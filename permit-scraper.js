@@ -147,7 +147,7 @@ casper.then(function () {
 });
 
 // Parsing basic info
-casper.then(function () {
+casper.then(function (form) {
     for (var key in basicSelectorDictionary) {
         form[key] = this.fetchText(basicSelectorDictionary[key]);
     }
@@ -161,33 +161,39 @@ casper.then(function () {
 
 casper.then(function () {
     // Get the list of links to post 1999 permits
-    var listOfLinks = this.evaluate(function () {
-        var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
-            return link.href;
-        });
-        return links;
-    });
+    // var listOfLinks = this.evaluate(function (self) {
+    //     var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
+    //         return link.href;
+    //     });
+    //     self.echo(links);
+    //     return links;
+    // });
 
     var permits = [];
 
-    this.each(listOfLinks, function (self, link) {
+    var self = this;
+
+    this.echo(this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href'));
+
+    this.each(links, function (link) {
+        console.log(link);
         self.thenOpen(link, function() {
             var permit = {};
             // Parsing the permit
             for (var key in posseSelectorDictionary) {
-                permit[key] = this.fetchText(posseSelectorDictionary[key]);
+                permit[key] = self.fetchText(posseSelectorDictionary[key]);
             }
             for (var key in posseButtons) {
-                permit[key] = this.getElementAttribute(posseButtons[key], value);
+                permit[key] = self.getElementAttribute(posseButtons[key], 'value');
             }
             permits.push(permit);
         });
         });
-    form['permits'] = permits;
+    form.permits = permits;
     });
 
 casper.then(function () {
-    this.echo(form);
-})
+    this.echo(form.SMA);
+});
 
 casper.run();
