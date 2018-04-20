@@ -132,7 +132,7 @@ casper.start(
     'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
     function () {
         this.fillSelectors('span#TMK_713880_S0_sp', {
-            'input[name="TMK_713880_S0"]': '86023112',
+            'input[name="TMK_713880_S0"]': '94169064',
         }, false);
     }
 );
