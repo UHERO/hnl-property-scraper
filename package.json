@@ -23,8 +23,7 @@
     "npm": "^5.8.0",
     "parse-address": "0.0.5",
     "phantomjs-prebuilt": "^2.1.7",
-    "request": "^2.72.0",
-    "spooky": "^0.2.5"
+    "request": "^2.72.0"
   },
   "devDependencies": {
     "chai": "^3.5.0",

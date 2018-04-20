@@ -161,16 +161,22 @@ casper.then(function () {
 
 casper.then(function () {
     // Get the list of links to post 1999 permits
-    var listOfLinks = this.evaluate(function () {
-        var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
-            return link.href;
-        });
-        return links;
-    });
+    // var listOfLinks = this.evaluate(function () {
+    //     var links = [].map.call(document.querySelectorAll('a[href*="BuildingPermit&PosseObjectId"]'), function (link) {
+    //         return link.href;
+    //     });
+    //     return links;
+    // });
 
     var permits = [];
 
-    this.each(listOfLinks, function (self, link) {
+    var self = this;
+
+    var links = this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
+
+    console.log(links);
+
+    this.each(links, function (link, self) {
         self.thenOpen(link, function() {
             var permit = {};
             // Parsing the permit
@@ -187,7 +193,7 @@ casper.then(function () {
     });
 
 casper.then(function () {
-    this.echo(form);
+    this.echo(form.permits);
 })
 
 casper.run();
