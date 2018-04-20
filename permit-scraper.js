@@ -151,7 +151,6 @@ casper.then(function (form) {
     for (var key in basicSelectorDictionary) {
         form[key] = this.fetchText(basicSelectorDictionary[key]);
     }
-    this.echo(form.zoning);
 });
 
 // Getting to the permits page
@@ -175,11 +174,8 @@ casper.then(function () {
 
     var links = this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
 
-    this.echo(links);
-
-    this.each(links, function (link) {
-        console.log(link);
-        self.thenOpen(link, function() {
+    links.forEach(function (link) {
+        self.thenOpen('http:' + link, function() {
             var permit = {};
             // Parsing the permit
             for (var key in posseSelectorDictionary) {
@@ -188,9 +184,12 @@ casper.then(function () {
             for (var key in posseButtons) {
                 permit[key] = self.getElementAttribute(posseButtons[key], 'value');
             }
+            console.log(permit.applicationNumber);
             permits.push(permit);
+            console.log(permits[permits.length - 1].applicationNumber);
         });
         });
+    console.log(permits[0].applicationNumber);
     form.permits = permits;
     });
 
