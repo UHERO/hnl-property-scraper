@@ -138,6 +138,8 @@ function postPermit(appNumber, data) {
       data: data // this data is json of a permit
     });
   });
+
+  casper.run();
 }
 
 function parse(tmk) {
