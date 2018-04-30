@@ -142,7 +142,25 @@ function postPermit(appNumber, data) {
   casper.run();
 }
 
+function postTmk(tmk, result) {
+  casper.start();
+
+  var postAddress = 'http://localhost:8000/tmks/' + String(tmk);
+
+  casper.then( function() {
+    this.open(postAddress, {
+      method: 'post',
+      data: {'body': String(result)} // this data is json of a permit
+    });
+  });
+
+  casper.run();
+}
+
 function parse(tmk) {
+
+  var result = false;
+
   casper.start(
     'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
     function () {
@@ -190,13 +208,16 @@ function parse(tmk) {
           permit[key] = self.getElementAttribute(posseButtons[key], 'value');
         }
         console.log('Collected permit: ', permit.applicationNumber);
-
+        postPermit(permit.applicationNumber, permit);
       });
     });
   });
 
+  result = true;
+
   casper.then(function () {
-    this.echo(form.SMA);
+    this.echo('TMK processed: ', tmk);
+    postTmk(tmk, result);
   });
 
   casper.run();
