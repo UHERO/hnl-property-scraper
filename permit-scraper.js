@@ -127,60 +127,77 @@ function camelize(str) {
         });
 }
 
-// Search by TMK from the main page
-casper.start(
+function postPermit(appNumber, data) {
+  casper.start();
+
+  var postAddress = 'http://localhost:8000/permits/' + String(appNumber);
+
+  casper.then( function() {
+    this.open(postAddress, {
+      method: 'post',
+      data: data // this data is json of a permit
+    });
+  });
+}
+
+function parse(tmk) {
+  casper.start(
     'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
     function () {
-        this.fillSelectors('span#TMK_713880_S0_sp', {
-            'input[name="TMK_713880_S0"]': '94169064',
-        }, false);
+      this.fillSelectors('span#TMK_713880_S0_sp', {
+        'input[name="TMK_713880_S0"]': tmk,
+      }, false);
     }
-);
+  );
 
-casper.then(function () {
+  casper.then(function () {
     this.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
-});
+  });
 
-casper.then(function () {
+  casper.then(function () {
     var addr = this.getCurrentUrl();
     posseId = addr.slice(addr.lastIndexOf('=') + 1);
-});
+  });
 
 // Parsing basic info
-casper.then(function (form) {
+  casper.then(function (form) {
     for (var key in basicSelectorDictionary) {
-        form[key] = this.fetchText(basicSelectorDictionary[key]);
+      form[key] = this.fetchText(basicSelectorDictionary[key]);
     }
-});
+  });
 
 // Getting to the permits page
-casper.then(function () {
+  casper.then(function () {
     this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
-});
+  });
 
-casper.then(function () {
+  casper.then(function () {
 
     var self = this;
 
     var links = this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
 
     links.forEach(function (link) {
-        self.thenOpen('http:' + link, function() {
-            var permit = form;
-            // Parsing the permit
-            for (var key in posseSelectorDictionary) {
-                permit[key] = self.fetchText(posseSelectorDictionary[key]);
-            }
-            for (var key in posseButtons) {
-                permit[key] = self.getElementAttribute(posseButtons[key], 'value');
-            }
-            console.log(permit.applicationNumber);
-        });
-        });
+      self.thenOpen('http:' + link, function() {
+        var permit = form;
+        // Parsing the permit
+        for (var key in posseSelectorDictionary) {
+          permit[key] = self.fetchText(posseSelectorDictionary[key]);
+        }
+        for (var key in posseButtons) {
+          permit[key] = self.getElementAttribute(posseButtons[key], 'value');
+        }
+        console.log('Collected permit: ', permit.applicationNumber);
+
+      });
     });
+  });
 
-casper.then(function () {
+  casper.then(function () {
     this.echo(form.SMA);
-});
+  });
 
-casper.run();
+  casper.run();
+}
+
+// Search by TMK from the main page
