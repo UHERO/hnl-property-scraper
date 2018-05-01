@@ -2,6 +2,8 @@ var casper = require('casper').create();
 
 var restCasper = require('casper').create();
 
+//var restCasper = require('casper').create();
+
 var basicSelectorDictionary = {
   developmentPlanAreas: 'span[id^="Description_713925_734875"]',
   floodZones: 'span[id^="Description_713925_734356"]',
@@ -118,10 +120,6 @@ var posseButtons = {
     occupancyResidential: 'input[id^="OccupancyGroupResidential_713850_"]',
 };
 
-var posseId = 0;
-
-var form = {};
-
 function camelize(str) {
     return str.trim().replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, function (match, index) {
         if (+match === 0) return ''; // or if (/\s+/.test(match)) for white spaces
@@ -131,7 +129,6 @@ function camelize(str) {
 
 function postPermit(appNumber, data) {
   restCasper.start();
-
   var postAddress = 'http://localhost:8000/permits/' + String(appNumber);
 
   restCasper.then( function() {
@@ -161,13 +158,17 @@ function postTmk(tmk, result) {
 
 function parse(tmk) {
 
+  var posseId = 0;
+
+  var form = {};
+
   var result = false;
 
   casper.start(
     'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
     function () {
       this.fillSelectors('span#TMK_713880_S0_sp', {
-        'input[name="TMK_713880_S0"]': tmk,
+        'input[name="TMK_713880_S0"]': String(tmk),
       }, false);
     }
   );
@@ -201,6 +202,7 @@ function parse(tmk) {
 
     links.forEach(function (link) {
       self.thenOpen('http:' + link, function() {
+        // TODO check if link is already present in the database
         var permit = form;
         // Parsing the permit
         for (var key in posseSelectorDictionary) {
@@ -217,12 +219,33 @@ function parse(tmk) {
 
   result = true;
 
-  casper.then(function () {
+  casper.run(function () {
     this.echo('TMK processed: ', tmk);
     postTmk(tmk, result);
+    this.exit();
+  });
+}
+
+function parseBunch(num) {
+  var reqLink = 'http://localhost:8000/tmks/?num=' + String(num);
+
+  restCasper.start();
+
+  restCasper.then( function () {
+    restCasper.open(reqLink, {
+      method: 'get',
+      enctype: 'application/json'
+    }).then( function () {
+      tmks = JSON.parse(restCasper.getPageContent());
+      tmks.data.forEach(function (record) {
+        parse(record.tmk);
+      })
+    });
   });
 
-  casper.run();
+  restCasper.run();
 }
+
+parseBunch(2);
 
 // Search by TMK from the main page
