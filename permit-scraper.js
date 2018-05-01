@@ -1,5 +1,7 @@
 var casper = require('casper').create();
 
+var restCasper = require('casper').create();
+
 var basicSelectorDictionary = {
   developmentPlanAreas: 'span[id^="Description_713925_734875"]',
   floodZones: 'span[id^="Description_713925_734356"]',
@@ -128,33 +130,33 @@ function camelize(str) {
 }
 
 function postPermit(appNumber, data) {
-  casper.start();
+  restCasper.start();
 
   var postAddress = 'http://localhost:8000/permits/' + String(appNumber);
 
-  casper.then( function() {
-    this.open(postAddress, {
+  restCasper.then( function() {
+    restCasper.open(postAddress, {
       method: 'post',
       data: data // this data is json of a permit
     });
   });
 
-  casper.run();
+  restCasper.run();
 }
 
 function postTmk(tmk, result) {
-  casper.start();
+  restCasper.start();
 
   var postAddress = 'http://localhost:8000/tmks/' + String(tmk);
 
-  casper.then( function() {
-    this.open(postAddress, {
+  restCasper.then( function() {
+    restCasper.open(postAddress, {
       method: 'post',
       data: {'body': String(result)} // this data is json of a permit
     });
   });
 
-  casper.run();
+  restCasper.run();
 }
 
 function parse(tmk) {
