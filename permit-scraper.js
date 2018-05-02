@@ -167,49 +167,47 @@ function parse(tmk) {
   casper.start(
     'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
     function () {
-      this.fillSelectors('span#TMK_713880_S0_sp', {
+      casper.fillSelectors('span#TMK_713880_S0_sp', {
         'input[name="TMK_713880_S0"]': String(tmk),
       }, false);
     }
   );
 
   casper.then(function () {
-    this.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
+    casper.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
   });
 
   casper.then(function () {
-    var addr = this.getCurrentUrl();
+    var addr = casper.getCurrentUrl();
     posseId = addr.slice(addr.lastIndexOf('=') + 1);
   });
 
 // Parsing basic info
   casper.then(function (form) {
     for (var key in basicSelectorDictionary) {
-      form[key] = this.fetchText(basicSelectorDictionary[key]);
+      form[key] = casper.fetchText(basicSelectorDictionary[key]);
     }
   });
 
 // Getting to the permits page
   casper.then(function () {
-    this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
+    casper.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
   });
 
   casper.then(function () {
 
-    var self = this;
-
-    var links = this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
+    var links = casper.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
 
     links.forEach(function (link) {
-      self.thenOpen('http:' + link, function() {
+      casper.thenOpen('http:' + link, function() {
         // TODO check if link is already present in the database
         var permit = form;
         // Parsing the permit
         for (var key in posseSelectorDictionary) {
-          permit[key] = self.fetchText(posseSelectorDictionary[key]);
+          permit[key] = casper.fetchText(posseSelectorDictionary[key]);
         }
         for (var key in posseButtons) {
-          permit[key] = self.getElementAttribute(posseButtons[key], 'value');
+          permit[key] = casper.getElementAttribute(posseButtons[key], 'value');
         }
         console.log('Collected permit: ', permit.applicationNumber);
         postPermit(permit.applicationNumber, permit);
@@ -220,9 +218,9 @@ function parse(tmk) {
   result = true;
 
   casper.run(function () {
-    this.echo('TMK processed: ', tmk);
+    casper.echo('TMK processed: ', tmk);
     postTmk(tmk, result);
-    this.exit();
+    casper.exit();
   });
 }
 
