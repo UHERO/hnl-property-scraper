@@ -1,8 +1,4 @@
-var casper = require('casper').create();
-
-var restCasper = require('casper').create();
-
-//var restCasper = require('casper').create();
+var casper = require('casper').create({verbose: true});
 
 var basicSelectorDictionary = {
   developmentPlanAreas: 'span[id^="Description_713925_734875"]',
@@ -128,122 +124,149 @@ function camelize(str) {
 }
 
 function postPermit(appNumber, data) {
-  restCasper.start();
+  casper.start();
   var postAddress = 'http://localhost:8000/permits/' + String(appNumber);
 
-  restCasper.then( function() {
-    restCasper.open(postAddress, {
+  casper.then( function() {
+    casper.open(postAddress, {
       method: 'post',
       data: data // this data is json of a permit
     });
   });
 
-  restCasper.run();
+  casper.run();
 }
 
 function postTmk(tmk, result) {
-  restCasper.start();
+  casper.start();
 
   var postAddress = 'http://localhost:8000/tmks/' + String(tmk);
 
-  restCasper.then( function() {
-    restCasper.open(postAddress, {
+  casper.then( function() {
+    casper.open(postAddress, {
       method: 'post',
       data: {'body': String(result)} // this data is json of a permit
     });
   });
 
-  restCasper.run();
+  casper.run();
 }
 
-function parse(tmk) {
+function parse(tmks) {
 
-  var posseId = 0;
+  casper.start();
 
-  var form = {};
+  casper.each(tmks, function (self, tmk) {
+    var posseId = 0;
 
-  var result = false;
+    var form = {};
 
-  casper.start(
-    'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
-    function () {
-      casper.fillSelectors('span#TMK_713880_S0_sp', {
-        'input[name="TMK_713880_S0"]': String(tmk),
-      }, false);
-    }
-  );
+    var result = false;
 
-  casper.then(function () {
-    casper.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
-  });
+    self.thenOpen(
+      'http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch',
+      function () {
+        this.fillSelectors('span#TMK_713880_S0_sp', {
+          'input[name="TMK_713880_S0"]': String(tmk),
+        }, false);
+      }
+    );
 
-  casper.then(function () {
-    var addr = casper.getCurrentUrl();
-    posseId = addr.slice(addr.lastIndexOf('=') + 1);
-  });
+    self.then(function () {
+      this.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
+    });
+
+    self.then(function () {
+      var addr = this.getCurrentUrl();
+      posseId = addr.slice(addr.lastIndexOf('=') + 1);
+      form['posseId'] = posseId;
+    });
 
 // Parsing basic info
-  casper.then(function (form) {
-    for (var key in basicSelectorDictionary) {
-      form[key] = casper.fetchText(basicSelectorDictionary[key]);
-    }
-  });
+    self.then(function () {
+      for (var key in basicSelectorDictionary) {
+        form[key] = this.fetchText(basicSelectorDictionary[key]);
+      }
+    });
 
 // Getting to the permits page
-  casper.then(function () {
-    casper.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
-  });
+    self.then(function () {
+      this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
+    });
 
-  casper.then(function () {
+    self.then(function () {
 
-    var links = casper.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
+      var links = this.getElementsAttribute('a[href*="BuildingPermit&PosseObjectId"]', 'href');
 
-    links.forEach(function (link) {
-      casper.thenOpen('http:' + link, function() {
-        // TODO check if link is already present in the database
-        var permit = form;
-        // Parsing the permit
-        for (var key in posseSelectorDictionary) {
-          permit[key] = casper.fetchText(posseSelectorDictionary[key]);
-        }
-        for (var key in posseButtons) {
-          permit[key] = casper.getElementAttribute(posseButtons[key], 'value');
-        }
-        console.log('Collected permit: ', permit.applicationNumber);
-        postPermit(permit.applicationNumber, permit);
+      this.each(links, function (self, link) {
+        console.log('link in process: ', link);
+        self.thenOpen('http:' + link, function() {
+          // TODO check if link is already present in the database
+
+          var permit = form;
+
+          permit['link'] = link;
+          // Parsing the permit
+          for (var key in posseSelectorDictionary) {
+            permit[key] = this.fetchText(posseSelectorDictionary[key]);
+          }
+          for (var key in posseButtons) {
+            permit[key] = this.getElementAttribute(posseButtons[key], 'value');
+          }
+          console.log('Collected permit: ', permit.applicationNumber);
+
+          var postAddress = 'http://localhost:8000/permits/' + String(permit.applicationNumber);
+
+          this.then( function() {
+            this.open(postAddress, {
+              method: 'post',
+              data: permit // this data is json of a permit
+            });
+          });
+          //postPermit(permit.applicationNumber, permit);
+        });
       });
     });
+
+    result = true;
+
+    var postAddress = 'http://localhost:8000/tmks/' + String(tmk);
+
+    casper.then( function() {
+      casper.open(postAddress, {
+        method: 'post',
+        data: {'body': String(result)} // this data is a result of the process
+      });
+    });
+
+    console.log('TMK processed: ', tmk);
+
   });
 
-  result = true;
+  // var casper = require('casper').create();
 
-  casper.run(function () {
-    casper.echo('TMK processed: ', tmk);
-    postTmk(tmk, result);
-    casper.exit();
-  });
+
+  casper.run();
 }
 
 function parseBunch(num) {
   var reqLink = 'http://localhost:8000/tmks/?num=' + String(num);
 
-  restCasper.start();
+  casper.start();
 
-  restCasper.then( function () {
-    restCasper.open(reqLink, {
+  casper.then( function () {
+    casper.open(reqLink, {
       method: 'get',
       enctype: 'application/json'
     }).then( function () {
-      tmks = JSON.parse(restCasper.getPageContent());
-      tmks.data.forEach(function (record) {
-        parse(record.tmk);
-      })
+      tmks = JSON.parse(casper.getPageContent());
+      parse(tmks.data);
     });
   });
 
-  restCasper.run();
+  casper.run();
 }
 
-parseBunch(2);
+parse([12002012, 91070169]);
 
 // Search by TMK from the main page
