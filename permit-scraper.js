@@ -1,4 +1,18 @@
-var casper = require('casper').create({verbose: true});
+var casper = require('casper').create({
+
+  stepTimeout: 30000,
+  verbose: true,
+  onError: function(self, m) {
+    console.log('FATAL: ' + m);
+  },
+  onStepTimeout: function (self, m){
+    console.log('timeout: step' + m);
+  },
+  pageSettings: {
+    loadImages: false,
+    loadPlugins: false,
+  }
+});
 
 var basicSelectorDictionary = {
   developmentPlanAreas: 'span[id^="Description_713925_734875"]',
@@ -159,7 +173,7 @@ function parse() {
   var allTmks = [];
 
   casper.then( function () {
-    casper.open('http://localhost:8000/tmks/?num=2', {
+    casper.open('http://localhost:8000/shorttmks/?num=2', {
       method: 'get',
       enctype: 'application/json'
     });
@@ -174,22 +188,27 @@ function parse() {
     casper.echo(allTmks.length);
 
     casper.each(allTmks, function (self, link) {
+
       var posseId = 0;
 
-      var tmk = link._id.slice(0, 8);
+      var tmk = String(link.TMK);
+
+      console.log(tmk);
 
       var form = {};
 
       var result = false;
 
-      self.open('http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch');
+      self.thenOpen('http://dppweb.honolulu.gov/DPPWeb/Default.aspx?PossePresentation=PropertySearch');
 
-      self.then(function () {
+      self.waitForSelector('span#TMK_713880_S0_sp', function () {
         this.echo('tmk is ' + tmk);
         this.fillSelectors('span#TMK_713880_S0_sp', {
           'input[name="TMK_713880_S0"]': tmk,
         }, false);
-      });
+      }, function () {
+        console.log('DPP search page timeout' + tmk);
+      }, 10000);
 
       self.then(function () {
         this.click('a#ctl00_cphBottomFunctionBand_ctl05_PerformSearch');
@@ -210,7 +229,9 @@ function parse() {
 
 // Getting to the permits page
       self.then(function () {
-        this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
+        if (this.exists('a#ctl00_cphTopBand_ctl03_hlkTabLink')) {
+          this.click('a#ctl00_cphTopBand_ctl03_hlkTabLink');
+        }
       });
 
       self.then(function () {
@@ -237,7 +258,7 @@ function parse() {
             var postAddress = 'http://localhost:8000/permits/' + String(permit.applicationNumber);
 
             this.then( function() {
-              this.open(postAddress, {
+              this.thenOpen(postAddress, {
                 method: 'post',
                 data: permit // this data is json of a permit
               });
@@ -249,10 +270,10 @@ function parse() {
 
       result = true;
 
-      var postAddress = 'http://localhost:8000/tmks/' + String(tmk);
+      var postAddress = 'http://localhost:8000/shorttmks/' + String(tmk);
 
-      casper.then( function() {
-        casper.open(postAddress, {
+      self.then( function() {
+        this.thenOpen(postAddress, {
           method: 'post',
           data: {'body': String(result)} // this data is a result of the process
         });
